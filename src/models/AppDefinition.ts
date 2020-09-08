@@ -61,6 +61,7 @@ interface IAppDefinitionBase {
     nodeId?: string
     instanceCount: number
     preDeployFunction?: string
+    serviceUpdateOverride?: string
     customNginxConfig?: string
     networks: string[]
     customDomain: IAppCustomDomain[]
@@ -90,12 +91,12 @@ interface IAppDef extends IAppDefinitionBase {
 
 interface IAppDefSaved extends IAppDefinitionBase {
     appPushWebhook:
-    | {
-        tokenVersion: string
-        repoInfo: RepoInfoEncrypted
-        pushWebhookToken: string
-    }
-    | undefined
+        | {
+              tokenVersion: string
+              repoInfo: RepoInfoEncrypted
+              pushWebhookToken: string
+          }
+        | undefined
 
     httpAuth?: {
         user: string

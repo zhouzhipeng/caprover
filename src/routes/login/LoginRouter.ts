@@ -1,18 +1,17 @@
 import express = require('express')
-import BaseApi = require('../../api/BaseApi')
-import ApiStatusCodes = require('../../api/ApiStatusCodes')
-import CaptainConstants = require('../../utils/CaptainConstants')
-import InjectionExtractor = require('../../injection/InjectionExtractor')
-import DataStoreProvider = require('../../datastore/DataStoreProvider')
-import CaptainManager = require('../../user/system/CaptainManager')
-import Authenticator = require('../../user/Authenticator')
+import ApiStatusCodes from '../../api/ApiStatusCodes'
+import BaseApi from '../../api/BaseApi'
+import DataStoreProvider from '../../datastore/DataStoreProvider'
+import InjectionExtractor from '../../injection/InjectionExtractor'
+import Authenticator from '../../user/Authenticator'
+import CaptainConstants from '../../utils/CaptainConstants'
 import CircularQueue from '../../utils/CircularQueue'
 
 const router = express.Router()
 
 const failedLoginCircularTimestamps = new CircularQueue<number>(5)
 
-router.post('/', function(req, res, next) {
+router.post('/', function (req, res, next) {
     let password = req.body.password || ''
 
     if (!password) {
@@ -32,7 +31,7 @@ router.post('/', function(req, res, next) {
     let loadedHashedPassword = ''
 
     Promise.resolve() //
-        .then(function() {
+        .then(function () {
             const oldestKnownFailedLogin = failedLoginCircularTimestamps.peek()
             if (
                 oldestKnownFailedLogin &&
@@ -45,20 +44,20 @@ router.post('/', function(req, res, next) {
 
             return DataStoreProvider.getDataStore(namespace).getHashedPassword()
         })
-        .then(function(savedHashedPassword) {
+        .then(function (savedHashedPassword) {
             loadedHashedPassword = savedHashedPassword
             return Authenticator.getAuthenticator(namespace).getAuthToken(
                 password,
                 loadedHashedPassword
             )
         })
-        .then(function(token) {
+        .then(function (token) {
             authToken = token
             return Authenticator.getAuthenticator(
                 namespace
             ).getAuthTokenForCookies(password, loadedHashedPassword)
         })
-        .then(function(cookieAuth) {
+        .then(function (cookieAuth) {
             res.cookie(CaptainConstants.headerCookieAuth, cookieAuth)
             let baseApi = new BaseApi(
                 ApiStatusCodes.STATUS_OK,
@@ -67,8 +66,8 @@ router.post('/', function(req, res, next) {
             baseApi.data = { token: authToken }
             res.send(baseApi)
         })
-        .catch(function(err) {
-            return new Promise(function(resolve, reject) {
+        .catch(function (err) {
+            return new Promise(function (resolve, reject) {
                 if (
                     err &&
                     err.captainErrorType &&
@@ -83,4 +82,4 @@ router.post('/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-export = router
+export default router

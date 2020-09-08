@@ -1,19 +1,18 @@
 import SshClientImport = require('ssh2')
-import CaptainConstants = require('../../utils/CaptainConstants')
-import Logger = require('../../utils/Logger')
-import CertbotManager = require('./CertbotManager')
-import ApiStatusCodes = require('../../api/ApiStatusCodes')
-import DockerApi from '../../docker/DockerApi'
-import * as tar from 'tar'
-import * as fs from 'fs-extra'
-import Utils from '../../utils/Utils'
-import { BackupMeta, RestoringInfo } from '../../models/BackupMeta'
-import DockerUtils from '../../docker/DockerUtils'
-import uuid = require('uuid')
-import Authenticator = require('../Authenticator')
-import * as path from 'path'
 import { exec } from 'child_process'
+import * as fs from 'fs-extra'
 import * as moment from 'moment'
+import * as path from 'path'
+import * as tar from 'tar'
+import ApiStatusCodes from '../../api/ApiStatusCodes'
+import DockerApi from '../../docker/DockerApi'
+import DockerUtils from '../../docker/DockerUtils'
+import { BackupMeta, RestoringInfo } from '../../models/BackupMeta'
+import CaptainConstants from '../../utils/CaptainConstants'
+import Logger from '../../utils/Logger'
+import Utils from '../../utils/Utils'
+import Authenticator from '../Authenticator'
+import CertbotManager from './CertbotManager'
 const SshClient = SshClientImport.Client
 
 const CURRENT_NODE_DONT_CHANGE = 'CURRENT_NODE_DONT_CHANGE'
@@ -22,8 +21,7 @@ const IP_PLACEHOLDER = 'replace-me-with-new-ip-or-empty-see-docs'
 const BACKUP_JSON = 'backup.json'
 const RESTORE_INSTRUCTIONS = 'restore-instructions.json'
 
-const RESTORE_INSTRUCTIONS_ABS_PATH =
-    CaptainConstants.restoreDirectoryPath + '/' + RESTORE_INSTRUCTIONS
+const RESTORE_INSTRUCTIONS_ABS_PATH = `${CaptainConstants.restoreDirectoryPath}/${RESTORE_INSTRUCTIONS}`
 
 export interface IBackupCallbacks {
     getNodesInfo: () => Promise<ServerDockerInfo[]>
@@ -31,8 +29,7 @@ export interface IBackupCallbacks {
     getCertbotManager: () => CertbotManager
 }
 
-const BACKUP_META_DATA_ABS_PATH =
-    CaptainConstants.restoreDirectoryPath + '/meta/' + BACKUP_JSON
+const BACKUP_META_DATA_ABS_PATH = `${CaptainConstants.restoreDirectoryPath}/meta/${BACKUP_JSON}`
 export default class BackupManager {
     private longOperationInProgress: boolean
 
@@ -65,24 +62,23 @@ export default class BackupManager {
         // - Replace the nodeId in apps with the new nodeId based on restore-instructions.json
         // - Create a captain-salt secret using the data in restore
         // - Copy restore files to proper places
-        const self = this
 
         if (!fs.pathExistsSync(RESTORE_INSTRUCTIONS_ABS_PATH)) return
 
         const oldNodeIdToNewIpMap: IHashMapGeneric<string> = {}
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 Logger.d('Starting restoration, phase-1.')
 
                 return fs.readJson(RESTORE_INSTRUCTIONS_ABS_PATH)
             })
-            .then(function(restoringInfo: RestoringInfo) {
+            .then(function (restoringInfo: RestoringInfo) {
                 const ps: (() => Promise<void>)[] = []
-                restoringInfo.nodesMapping.forEach(n => {
+                restoringInfo.nodesMapping.forEach((n) => {
                     let isManager = false
 
-                    restoringInfo.oldNodesForReference.forEach(oldN => {
+                    restoringInfo.oldNodesForReference.forEach((oldN) => {
                         if (oldN.nodeData.ip === n.oldIp) {
                             oldNodeIdToNewIpMap[oldN.nodeData.nodeId] =
                                 n.newIp === CURRENT_NODE_DONT_CHANGE
@@ -99,24 +95,26 @@ export default class BackupManager {
                     const NEW_IP = n.newIp
                     const PRIVATE_KEY_PATH = n.privateKeyPath
 
-                    ps.push(function() {
+                    ps.push(function () {
                         return Promise.resolve()
-                            .then(function() {
+                            .then(function () {
                                 Logger.d(
-                                    'Joining other node to swarm: ' + NEW_IP
+                                    `Joining other node to swarm: ${NEW_IP}`
                                 )
                                 return DockerUtils.joinDockerNode(
                                     DockerApi.get(),
+                                    'root',
+                                    22,
                                     captainIpAddress,
                                     isManager,
                                     NEW_IP,
                                     fs.readFileSync(PRIVATE_KEY_PATH, 'utf8')
                                 )
                             })
-                            .then(function() {
-                                Logger.d('Joined swarm: ' + NEW_IP)
+                            .then(function () {
+                                Logger.d(`Joined swarm: ${NEW_IP}`)
                             })
-                            .then(function() {
+                            .then(function () {
                                 Logger.d('Waiting 5 seconds...')
                                 return Utils.getDelayedPromise(5000)
                             })
@@ -131,25 +129,25 @@ export default class BackupManager {
 
                 return Utils.runPromises(ps)
             })
-            .then(function() {
+            .then(function () {
                 Logger.d('Waiting for 5 seconds for things to settle...')
                 return Utils.getDelayedPromise(5000)
             })
-            .then(function() {
+            .then(function () {
                 Logger.d('Getting nodes info...')
                 return DockerApi.get().getNodesInfo()
             })
-            .then(function(nodesInfo) {
+            .then(function (nodesInfo) {
                 Logger.d('Remapping nodesId in config...')
                 function getNewNodeIdForIp(ip: string) {
                     let nodeId = ''
-                    nodesInfo.forEach(n => {
+                    nodesInfo.forEach((n) => {
                         if (n.ip === ip) nodeId = n.nodeId
                     })
 
                     if (nodeId) return nodeId
 
-                    throw new Error('No NodeID found for ' + ip)
+                    throw new Error(`No NodeID found for ${ip}`)
                 }
 
                 const configFilePathRestoring =
@@ -159,14 +157,14 @@ export default class BackupManager {
                     appDefinitions: IHashMapGeneric<IAppDefSaved>
                 } = fs.readJsonSync(configFilePathRestoring)
 
-                Object.keys(configData.appDefinitions).forEach(appName => {
+                Object.keys(configData.appDefinitions).forEach((appName) => {
                     const oldNodeIdForApp =
                         configData.appDefinitions[appName].nodeId
 
                     if (!oldNodeIdForApp) return
 
                     let oldNodeIdFound = false
-                    Object.keys(oldNodeIdToNewIpMap).forEach(oldNodeId => {
+                    Object.keys(oldNodeIdToNewIpMap).forEach((oldNodeId) => {
                         const newIp = oldNodeIdToNewIpMap[oldNodeId]
                         if (oldNodeIdForApp === oldNodeId) {
                             oldNodeIdFound = true
@@ -185,11 +183,11 @@ export default class BackupManager {
 
                 return fs.outputJson(configFilePathRestoring, configData)
             })
-            .then(function() {
+            .then(function () {
                 Logger.d('Config remapping done.')
                 return fs.readJson(BACKUP_META_DATA_ABS_PATH)
             })
-            .then(function(data: BackupMeta) {
+            .then(function (data: BackupMeta) {
                 const salt = data.salt
 
                 if (!salt)
@@ -204,13 +202,13 @@ export default class BackupManager {
                     salt
                 )
             })
-            .then(function() {
+            .then(function () {
                 return fs.move(
                     CaptainConstants.restoreDirectoryPath + '/data',
                     CaptainConstants.captainDataDirectory
                 )
             })
-            .then(function() {
+            .then(function () {
                 Logger.d(
                     'Restoration Phase-1 is completed! Starting the service...'
                 )
@@ -227,10 +225,8 @@ export default class BackupManager {
         // - Delete /captain/restore
         // - Wait until things settle (1 minute...)
 
-        const self = this
-
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 if (!fs.pathExistsSync(RESTORE_INSTRUCTIONS_ABS_PATH)) {
                     return
                 }
@@ -238,10 +234,10 @@ export default class BackupManager {
                 Logger.d('Running phase-2 of restoration...')
 
                 return Promise.resolve() //
-                    .then(function() {
+                    .then(function () {
                         return fs.readJson(BACKUP_META_DATA_ABS_PATH)
                     })
-                    .then(function(data: BackupMeta) {
+                    .then(function (data: BackupMeta) {
                         const restoringSalt = data.salt
                         if (restoringSalt !== captainSalt) {
                             throw new Error(
@@ -251,13 +247,13 @@ export default class BackupManager {
 
                         return ensureAllAppsInited()
                     })
-                    .then(function() {
+                    .then(function () {
                         Logger.d(
                             'waiting 20 seconds for all services to settle'
                         )
-                        Utils.getDelayedPromise(20000)
+                        return Utils.getDelayedPromise(20000)
                     })
-                    .then(function() {
+                    .then(function () {
                         return fs.remove(CaptainConstants.restoreDirectoryPath)
                     })
             })
@@ -266,7 +262,7 @@ export default class BackupManager {
     checkAndPrepareRestoration() {
         const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 let promise = Promise.resolve()
 
                 if (fs.pathExistsSync(CaptainConstants.restoreTarFilePath)) {
@@ -275,14 +271,14 @@ export default class BackupManager {
                     )
                     promise = self
                         .extractBackupContentAndRemoveTar() //
-                        .then(function() {
+                        .then(function () {
                             Logger.d('Restoration content are extracted.')
                             return self.createRestorationInstructionFile()
                         })
                 }
 
                 return promise //
-                    .then(function() {
+                    .then(function () {
                         if (fs.pathExistsSync(RESTORE_INSTRUCTIONS_ABS_PATH)) {
                             Logger.d('Resuming restoration from backup...')
                             return self.checkAccessToAllNodesInInstructions(
@@ -316,7 +312,7 @@ export default class BackupManager {
 
         let currentNodeFound = false
 
-        restoringInfo.nodesMapping.forEach(n => {
+        restoringInfo.nodesMapping.forEach((n) => {
             if (n.newIp === CURRENT_NODE_DONT_CHANGE) {
                 currentNodeFound = true
             }
@@ -324,14 +320,14 @@ export default class BackupManager {
 
         if (!currentNodeFound)
             throw new Error(
-                'You are not supposed to change ' + CURRENT_NODE_DONT_CHANGE
+                `You are not supposed to change ${CURRENT_NODE_DONT_CHANGE}`
             )
 
         const connectingFuncs: (() => Promise<void>)[] = []
 
         const newIps: string[] = []
 
-        restoringInfo.nodesMapping.forEach(n => {
+        restoringInfo.nodesMapping.forEach((n) => {
             if (!Utils.isValidIp(n.oldIp)) {
                 throw new Error(`${n.oldIp} is not a valid IP`)
             }
@@ -365,7 +361,7 @@ export default class BackupManager {
 
                 newIps.push(n.newIp)
 
-                connectingFuncs.push(function() {
+                connectingFuncs.push(function () {
                     return self.checkSshRoot(n.newIp, n.user, n.privateKeyPath)
                 })
             }
@@ -383,7 +379,7 @@ export default class BackupManager {
         privateKeyPath: string
     ) {
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 if (!remoteNodeIpAddress) throw new Error('ip cannot be empty')
 
                 if (!user) throw new Error('user cannot be empty')
@@ -393,17 +389,17 @@ export default class BackupManager {
 
                 if (!fs.pathExistsSync(privateKeyPath))
                     throw new Error(
-                        'private key is not found at ' + privateKeyPath
+                        `private key is not found at ${privateKeyPath}`
                     )
 
                 return fs.readFile(privateKeyPath, 'utf8')
             })
-            .then(function(privateKey) {
-                Logger.d('Testing ' + remoteNodeIpAddress)
+            .then(function (privateKey) {
+                Logger.d(`Testing ${remoteNodeIpAddress}`)
 
-                return new Promise<string>(function(resolve, reject) {
+                return new Promise<string>(function (resolve, reject) {
                     const conn = new SshClient()
-                    conn.on('error', function(err) {
+                    conn.on('error', function (err) {
                         Logger.e(err)
                         reject(
                             ApiStatusCodes.createError(
@@ -412,9 +408,9 @@ export default class BackupManager {
                             )
                         )
                     })
-                        .on('ready', function() {
+                        .on('ready', function () {
                             Logger.d('SSH Client :: ready')
-                            conn.exec('docker info', function(err, stream) {
+                            conn.exec('docker info', function (err, stream) {
                                 if (err) {
                                     Logger.e(err)
                                     reject(
@@ -431,15 +427,12 @@ export default class BackupManager {
                                 let hasExisted = false
 
                                 stream
-                                    .on('close', function(
+                                    .on('close', function (
                                         code: string,
                                         signal: string
                                     ) {
                                         Logger.d(
-                                            'Stream :: close :: code: ' +
-                                                code +
-                                                ', signal: ' +
-                                                signal
+                                            `Stream :: close :: code: ${code}, signal: ${signal}`
                                         )
                                         conn.end()
                                         if (hasExisted) {
@@ -448,12 +441,12 @@ export default class BackupManager {
                                         hasExisted = true
                                         resolve(dataReceived.join(''))
                                     })
-                                    .on('data', function(data: string) {
-                                        Logger.d('STDOUT: ' + data)
+                                    .on('data', function (data: string) {
+                                        Logger.d(`STDOUT: ${data}`)
                                         dataReceived.push(data)
                                     })
-                                    .stderr.on('data', function(data) {
-                                        Logger.e('STDERR: ' + data)
+                                    .stderr.on('data', function (data) {
+                                        Logger.e(`STDERR: ${data}`)
                                         if (hasExisted) {
                                             return
                                         }
@@ -461,7 +454,7 @@ export default class BackupManager {
                                         reject(
                                             ApiStatusCodes.createError(
                                                 ApiStatusCodes.STATUS_ERROR_GENERIC,
-                                                'Error during setup: ' + data
+                                                `Error during setup: ${data}`
                                             )
                                         )
                                     })
@@ -475,14 +468,13 @@ export default class BackupManager {
                         })
                 })
             })
-            .then(function(data) {
+            .then(function (data) {
                 if (data.toUpperCase().indexOf('SWARM: INACTIVE') < 0) {
                     throw new Error(
-                        'Either not root or already part of swarm? The output must include "Swarm: inactive" from ' +
-                            remoteNodeIpAddress
+                        `Either not root or already part of swarm? The output must include "Swarm: inactive" from ${remoteNodeIpAddress}`
                     )
                 }
-                Logger.d('Passed ' + remoteNodeIpAddress)
+                Logger.d(`Passed ${remoteNodeIpAddress}`)
             })
     }
 
@@ -495,7 +487,7 @@ export default class BackupManager {
     private createRestorationInstructionFile() {
         const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 const dirPath = CaptainConstants.restoreDirectoryPath
 
                 if (!fs.statSync(dirPath).isDirectory())
@@ -508,7 +500,7 @@ export default class BackupManager {
                 }
 
                 return Promise.resolve() //
-                    .then(function() {
+                    .then(function () {
                         Logger.d('Reading backup meta-data...')
 
                         const metaData = fs.readJsonSync(
@@ -548,7 +540,7 @@ export default class BackupManager {
 
         const oldServers = metaContent.nodes
 
-        oldServers.forEach(s => {
+        oldServers.forEach((s) => {
             if (s.isLeader) {
                 ret.nodesMapping.push({
                     newIp: CURRENT_NODE_DONT_CHANGE,
@@ -568,7 +560,7 @@ export default class BackupManager {
 
             const apps: string[] = []
 
-            Object.keys(configData.appDefinitions).forEach(appName => {
+            Object.keys(configData.appDefinitions).forEach((appName) => {
                 if (configData.appDefinitions[appName].nodeId === s.nodeId) {
                     apps.push(appName)
                 }
@@ -588,19 +580,19 @@ export default class BackupManager {
             throw new Error('restore tar file is not a file!!')
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return fs.ensureDir(CaptainConstants.restoreDirectoryPath)
             })
-            .then(function() {
+            .then(function () {
                 return tar
                     .extract({
                         file: CaptainConstants.restoreTarFilePath,
                         cwd: CaptainConstants.restoreDirectoryPath,
                     })
-                    .then(function() {
+                    .then(function () {
                         return fs.remove(CaptainConstants.restoreTarFilePath)
                     })
-                    .then(function() {
+                    .then(function () {
                         return Promise.resolve(true)
                     })
             })
@@ -611,15 +603,15 @@ export default class BackupManager {
         const certbotManager = iBackupCallbacks.getCertbotManager()
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 certbotManager.lock()
                 return self
                     .createBackupInternal(iBackupCallbacks)
-                    .then(function(data) {
+                    .then(function (data) {
                         certbotManager.unlock()
                         return data
                     })
-                    .catch(function(err) {
+                    .catch(function (err) {
                         certbotManager.unlock()
                         throw err
                     })
@@ -630,7 +622,7 @@ export default class BackupManager {
         const self = this
         let nodeInfo: ServerDockerInfo[]
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 self.lock()
 
                 // Check if exist /captain/temp/backup, delete directory
@@ -644,48 +636,46 @@ export default class BackupManager {
                 Logger.d('Creating backup...')
 
                 return Promise.resolve() //
-                    .then(function() {
+                    .then(function () {
                         return self.deleteBackupDirectoryIfExists()
                     })
-                    .then(function() {
+                    .then(function () {
                         return fs.ensureDir(RAW)
                     })
-                    .then(function() {
-                        Logger.d('Copying data to ' + RAW)
+                    .then(function () {
+                        Logger.d(`Copying data to ${RAW}`)
 
                         const dest = RAW + '/data'
 
                         // We cannot use fs.copy as it doesn't properly copy the broken SymLink which might exist in LetsEncrypt
                         // https://github.com/jprichardson/node-fs-extra/issues/638
-                        return new Promise(function(resolve, reject) {
+                        return new Promise(function (resolve, reject) {
                             const child = exec(
-                                `mkdir -p {dest} && cp -rp  ${
-                                    CaptainConstants.captainDataDirectory
-                                } ${dest}`
+                                `mkdir -p {dest} && cp -rp  ${CaptainConstants.captainDataDirectory} ${dest}`
                             )
                             child.addListener('error', reject)
                             child.addListener('exit', resolve)
                         })
                     })
-                    .then(function() {
+                    .then(function () {
                         return iBackupCallbacks.getNodesInfo()
                     })
-                    .then(function(nodes) {
-                        Logger.d('Copying meta to ' + RAW)
+                    .then(function (nodes) {
+                        Logger.d(`Copying meta to ${RAW}`)
 
                         nodeInfo = nodes
 
-                        return self.saveMetaFile(RAW + '/meta/' + BACKUP_JSON, {
+                        return self.saveMetaFile(`${RAW}/meta/${BACKUP_JSON}`, {
                             salt: iBackupCallbacks.getCaptainSalt(),
                             nodes: nodes,
                         })
                     })
-                    .then(function() {
+                    .then(function () {
                         const tarFilePath =
                             CaptainConstants.captainRootDirectoryBackup +
                             '/backup.tar'
 
-                        Logger.d('Creating tar file: ' + tarFilePath)
+                        Logger.d(`Creating tar file: ${tarFilePath}`)
 
                         return tar
                             .c(
@@ -695,7 +685,7 @@ export default class BackupManager {
                                 },
                                 ['./']
                             )
-                            .then(function() {
+                            .then(function () {
                                 let fileSizeInMb = Math.ceil(
                                     fs.statSync(tarFilePath).size / 1000000
                                 )
@@ -707,25 +697,21 @@ export default class BackupManager {
                                 return tarFilePath
                             })
                     })
-                    .then(function(tarFilePath) {
+                    .then(function (tarFilePath) {
                         const namespace = CaptainConstants.rootNameSpace
                         let mainIP = ''
 
-                        nodeInfo.forEach(n => {
+                        nodeInfo.forEach((n) => {
                             if (n.isLeader)
                                 mainIP = (n.ip || '').split('.').join('_')
                         })
 
                         const now = moment()
-                        const newName =
-                            CaptainConstants.captainDownloadsDirectory +
-                            '/' +
-                            namespace +
-                            '/caprover-backup-' +
-                            (now.format('YYYY_MM_DD-HH_mm_ss') +
-                                '-' +
-                                now.valueOf()) +
-                            `-ip-${mainIP}.tar`
+                        const newName = `${
+                            CaptainConstants.captainDownloadsDirectory
+                        }/${namespace}/caprover-backup-${`${now.format(
+                            'YYYY_MM_DD-HH_mm_ss'
+                        )}-${now.valueOf()}`}${`-ip-${mainIP}.tar`}`
                         fs.moveSync(tarFilePath, newName)
 
                         setTimeout(() => {
@@ -740,17 +726,17 @@ export default class BackupManager {
                             namespace
                         ).getDownloadToken(path.basename(newName))
                     })
-                    .then(function(token) {
+                    .then(function (token) {
                         return self
                             .deleteBackupDirectoryIfExists()
-                            .then(function() {
+                            .then(function () {
                                 self.unlock()
                                 return {
                                     downloadToken: token,
                                 }
                             })
                     })
-                    .catch(function(err) {
+                    .catch(function (err) {
                         self.unlock()
                         throw err
                     })
@@ -763,7 +749,7 @@ export default class BackupManager {
 
     deleteBackupDirectoryIfExists() {
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 if (
                     fs.existsSync(CaptainConstants.captainRootDirectoryBackup)
                 ) {

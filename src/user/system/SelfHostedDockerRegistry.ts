@@ -1,14 +1,12 @@
-import CaptainConstants = require('../../utils/CaptainConstants')
-import Logger = require('../../utils/Logger')
-import EnvVars = require('../../utils/EnvVars')
-import fs = require('fs-extra')
-import uuid = require('uuid/v4')
-import ApiStatusCodes = require('../../api/ApiStatusCodes')
-import bcrypt = require('bcryptjs')
+import ApiStatusCodes from '../../api/ApiStatusCodes'
+import DataStore from '../../datastore/DataStore'
 import DockerApi from '../../docker/DockerApi'
-import DataStore = require('../../datastore/DataStore')
-import CertbotManager = require('./CertbotManager')
-import LoadBalancerManager = require('./LoadBalancerManager')
+import CaptainConstants from '../../utils/CaptainConstants'
+import Logger from '../../utils/Logger'
+import CertbotManager from './CertbotManager'
+import LoadBalancerManager from './LoadBalancerManager'
+import fs = require('fs-extra')
+import bcrypt = require('bcryptjs')
 
 class SelfHostedDockerRegistry {
     constructor(
@@ -25,10 +23,10 @@ class SelfHostedDockerRegistry {
         const self = this
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.dataStore.getHasRootSsl()
             })
-            .then(function(rootHasSsl) {
+            .then(function (rootHasSsl) {
                 if (!rootHasSsl) {
                     throw ApiStatusCodes.createError(
                         ApiStatusCodes.ILLEGAL_OPERATION,
@@ -37,46 +35,47 @@ class SelfHostedDockerRegistry {
                 }
 
                 return self.certbotManager.enableSsl(
-                    CaptainConstants.registrySubDomain +
-                        '.' +
-                        self.dataStore.getRootDomain()
+                    `${
+                        CaptainConstants.registrySubDomain
+                    }.${self.dataStore.getRootDomain()}`
                 )
             })
-            .then(function() {
+            .then(function () {
                 return self.dataStore.setHasRegistrySsl(true)
             })
-            .then(function() {
+            .then(function () {
+                Logger.d(
+                    'Updating Load Balancer - SelfHostedDockerRegistry.enableRegistrySsl'
+                )
                 return self.loadBalancerManager.rePopulateNginxConfigFile(
                     self.dataStore
                 )
-            })
-            .then(function() {
-                return self.loadBalancerManager.sendReloadSignal()
             })
     }
 
     getLocalRegistryDomainAndPort() {
         const self = this
 
-        return (
-            CaptainConstants.registrySubDomain +
-            '.' +
-            self.dataStore.getRootDomain() +
-            ':' +
+        return `${
+            CaptainConstants.registrySubDomain
+        }.${self.dataStore.getRootDomain()}:${
             CaptainConstants.configs.registrySubDomainPort
-        )
+        }`
     }
 
     ensureServiceRemoved() {
         const dockerApi = this.dockerApi
-
+        const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
+                return self.dataStore.setHasRegistrySsl(false)
+            })
+            .then(function () {
                 return dockerApi.isServiceRunningByName(
                     CaptainConstants.registryServiceName
                 )
             })
-            .then(function(isRunning) {
+            .then(function (isRunning) {
                 if (!isRunning) return
 
                 return dockerApi.removeServiceByName(
@@ -97,18 +96,23 @@ class SelfHostedDockerRegistry {
                     undefined,
                     nodeId,
                     undefined,
-                    undefined,
+                    [
+                        {
+                            key: 'REGISTRY_STORAGE_DELETE_ENABLED',
+                            value: 'true',
+                        },
+                    ],
                     undefined
                 )
-                .then(function() {
+                .then(function () {
                     const waitTimeInMillis = 5000
                     Logger.d(
-                        'Waiting for ' +
-                            waitTimeInMillis / 1000 +
-                            ' seconds for Registry to start up'
+                        `Waiting for ${
+                            waitTimeInMillis / 1000
+                        } seconds for Registry to start up`
                     )
-                    return new Promise<boolean>(function(resolve, reject) {
-                        setTimeout(function() {
+                    return new Promise<boolean>(function (resolve, reject) {
+                        setTimeout(function () {
                             resolve(true)
                         }, waitTimeInMillis)
                     })
@@ -118,23 +122,22 @@ class SelfHostedDockerRegistry {
         const myNodeId = this.myNodeId
 
         return Promise.resolve()
-            .then(function() {
-                const authContent =
-                    CaptainConstants.captainRegistryUsername +
-                    ':' +
-                    bcrypt.hashSync(password, bcrypt.genSaltSync(10))
+            .then(function () {
+                const authContent = `${
+                    CaptainConstants.captainRegistryUsername
+                }:${bcrypt.hashSync(password, bcrypt.genSaltSync(10))}`
 
                 return fs.outputFile(
                     CaptainConstants.registryAuthPathOnHost,
                     authContent
                 )
             })
-            .then(function() {
+            .then(function () {
                 return dockerApi.isServiceRunningByName(
                     CaptainConstants.registryServiceName
                 )
             })
-            .then(function(isRunning) {
+            .then(function (isRunning) {
                 if (isRunning) {
                     Logger.d('Captain Registry is already running.. ')
 
@@ -148,13 +151,13 @@ class SelfHostedDockerRegistry {
                     )
 
                     return createRegistryServiceOnNode(myNodeId).then(
-                        function() {
+                        function () {
                             return myNodeId
                         }
                     )
                 }
             })
-            .then(function(nodeId) {
+            .then(function (nodeId) {
                 if (nodeId !== myNodeId) {
                     Logger.d(
                         'Captain Registry is running on a different node. Removing...'
@@ -164,11 +167,11 @@ class SelfHostedDockerRegistry {
                         .removeServiceByName(
                             CaptainConstants.registryServiceName
                         )
-                        .then(function() {
+                        .then(function () {
                             Logger.d('Creating Registry on this node...')
 
                             return createRegistryServiceOnNode(myNodeId).then(
-                                function() {
+                                function () {
                                     return true
                                 }
                             )
@@ -177,7 +180,7 @@ class SelfHostedDockerRegistry {
                     return true
                 }
             })
-            .then(function() {
+            .then(function () {
                 Logger.d('Updating Certbot service...')
 
                 return dockerApi.updateService(
@@ -202,21 +205,15 @@ class SelfHostedDockerRegistry {
                     [
                         {
                             key: 'REGISTRY_HTTP_TLS_CERTIFICATE',
-                            value:
-                                '/cert-files/live/' +
-                                CaptainConstants.registrySubDomain +
-                                '.' +
-                                dataStore.getRootDomain() +
-                                '/fullchain.pem',
+                            value: `/cert-files/live/${
+                                CaptainConstants.registrySubDomain
+                            }.${dataStore.getRootDomain()}/fullchain.pem`,
                         },
                         {
                             key: 'REGISTRY_HTTP_TLS_KEY',
-                            value:
-                                '/cert-files/live/' +
-                                CaptainConstants.registrySubDomain +
-                                '.' +
-                                dataStore.getRootDomain() +
-                                '/privkey.pem',
+                            value: `/cert-files/live/${
+                                CaptainConstants.registrySubDomain
+                            }.${dataStore.getRootDomain()}/privkey.pem`,
                         },
                         {
                             key: 'REGISTRY_AUTH',
@@ -229,6 +226,10 @@ class SelfHostedDockerRegistry {
                         {
                             key: 'REGISTRY_AUTH_HTPASSWD_PATH',
                             value: '/etc/auth',
+                        },
+                        {
+                            key: 'REGISTRY_STORAGE_DELETE_ENABLED',
+                            value: 'true',
                         },
                     ],
                     undefined,
@@ -246,10 +247,11 @@ class SelfHostedDockerRegistry {
                     ],
                     undefined,
                     undefined,
+                    undefined,
                     undefined
                 )
             })
     }
 }
 
-export = SelfHostedDockerRegistry
+export default SelfHostedDockerRegistry

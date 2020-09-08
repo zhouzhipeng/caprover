@@ -38,15 +38,15 @@
 import fs = require('fs-extra')
 import tar = require('tar')
 import path = require('path')
+import ApiStatusCodes from '../api/ApiStatusCodes'
 import DockerApi from '../docker/DockerApi'
-import GitHelper from '../utils/GitHelper'
-import CaptainConstants = require('../utils/CaptainConstants')
-import TemplateHelper = require('./TemplateHelper')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import { AnyError } from '../models/OtherTypes'
 import { IBuiltImage } from '../models/IBuiltImage'
-import BuildLog = require('./BuildLog')
-import DockerRegistryHelper = require('./DockerRegistryHelper')
+import { AnyError } from '../models/OtherTypes'
+import CaptainConstants from '../utils/CaptainConstants'
+import GitHelper from '../utils/GitHelper'
+import BuildLog from './BuildLog'
+import DockerRegistryHelper from './DockerRegistryHelper'
+import TemplateHelper from './TemplateHelper'
 
 const RAW_SOURCE_DIRECTORY = 'source_files'
 const TAR_FILE_NAME_READY_FOR_DOCKER = 'image.tar'
@@ -81,13 +81,7 @@ export default class ImageMaker {
     }
 
     private getDirectoryForRawSource(appName: string, version: number) {
-        return (
-            CaptainConstants.captainRawSourceDirectoryBase +
-            '/' +
-            appName +
-            '/' +
-            version
-        )
+        return `${CaptainConstants.captainRawSourceDirectoryBase}/${appName}/${version}`
     }
 
     /**
@@ -97,35 +91,37 @@ export default class ImageMaker {
         imageSource: IImageSource,
         appName: string,
         captainDefinitionRelativeFilePath: string,
-        appVersion: number
+        appVersion: number,
+        envVars: IAppEnvVar[]
     ): Promise<IBuiltImage> {
         const self = this
 
         const logs = self.buildLogsManager.getAppBuildLogs(appName)
 
         logs.clear()
-        logs.log('------------------------- ' + new Date())
-        logs.log('Build started for ' + appName)
+        logs.log(`------------------------- ${new Date()}`)
+        logs.log(`Build started for ${appName}`)
 
         let gitHash = ''
 
         const baseDir = self.getDirectoryForRawSource(appName, appVersion)
-        const rawDir = baseDir + '/' + RAW_SOURCE_DIRECTORY
-        const tarFilePath = baseDir + '/' + TAR_FILE_NAME_READY_FOR_DOCKER
+        const rawDir = `${baseDir}/${RAW_SOURCE_DIRECTORY}`
+        const tarFilePath = `${baseDir}/${TAR_FILE_NAME_READY_FOR_DOCKER}`
 
-        const baseImageNameWithoutVerAndReg =
-            'img-' + this.namespace + '-' + appName // img-captain-myapp
+        const baseImageNameWithoutVerAndReg = `img-${this.namespace}-${
+            appName // img-captain-myapp
+        }`
         let fullImageName = '' // repo.domain.com:998/username/reponame:8
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return self.extractContentIntoDestDirectory(
                     imageSource,
                     rawDir,
                     captainDefinitionRelativeFilePath
                 )
             })
-            .then(function(gitHashFromImageSource) {
+            .then(function (gitHashFromImageSource) {
                 gitHash = gitHashFromImageSource
                 // some users convert the directory into TAR instead of converting the content into TAR.
                 // we go one level deep and try to find the right directory.
@@ -135,39 +131,35 @@ export default class ImageMaker {
                     captainDefinitionRelativeFilePath
                 )
             })
-            .then(function(captainDefinitionAbsolutePath) {
+            .then(function (captainDefinitionAbsolutePath) {
                 return self
                     .getCaptainDefinition(captainDefinitionAbsolutePath)
-                    .then(function(captainDefinition) {
+                    .then(function (captainDefinition) {
                         if (captainDefinition.imageName) {
                             logs.log(
-                                `An explicit image name was provided (${
-                                    captainDefinition.imageName
-                                }). Therefore, no build process is needed.`
+                                `An explicit image name was provided (${captainDefinition.imageName}). Therefore, no build process is needed.`
                             )
 
                             logs.log(
-                                `Pulling this image: ${
-                                    captainDefinition.imageName
-                                } This process might take a few minutes.`
+                                `Pulling this image: ${captainDefinition.imageName} This process might take a few minutes.`
                             )
 
                             const providedImageName =
                                 captainDefinition.imageName + ''
 
                             return Promise.resolve() //
-                                .then(function() {
+                                .then(function () {
                                     return self.dockerRegistryHelper.getDockerAuthObjectForImageName(
                                         providedImageName
                                     )
                                 })
-                                .then(function(authObj) {
+                                .then(function (authObj) {
                                     return self.dockerApi.pullImage(
                                         providedImageName,
                                         authObj
                                     )
                                 })
-                                .then(function() {
+                                .then(function () {
                                     return providedImageName
                                 })
                         }
@@ -178,56 +170,57 @@ export default class ImageMaker {
                             tarFilePath,
                             baseImageNameWithoutVerAndReg,
                             appName,
-                            appVersion
+                            appVersion,
+                            envVars
                         )
                     })
             })
-            .then(function(ret) {
+            .then(function (ret) {
                 fullImageName = ret
             })
-            .then(function() {
+            .then(function () {
                 return fs.remove(baseDir)
             })
-            .then(function() {
+            .then(function () {
                 if (imageSource.uploadedTarPathSource) {
                     return fs.remove(
                         imageSource.uploadedTarPathSource.uploadedTarPath
                     )
                 }
             })
-            .catch(function(err) {
+            .catch(function (err) {
                 return fs
                     .remove(baseDir)
-                    .then(function() {
+                    .then(function () {
                         throw err
                     })
-                    .catch(function() {
+                    .catch(function () {
                         return Promise.reject(err)
                     })
             })
-            .catch(function(err) {
+            .catch(function (err) {
                 if (imageSource.uploadedTarPathSource) {
                     return fs
                         .remove(
                             imageSource.uploadedTarPathSource.uploadedTarPath
                         )
-                        .then(function() {
+                        .then(function () {
                             throw err
                         })
-                        .catch(function() {
+                        .catch(function () {
                             return Promise.reject(err)
                         })
                 }
                 return Promise.reject(err)
             })
-            .then(function() {
+            .then(function () {
                 logs.log(`Build has finished successfully!`)
                 return {
                     imageName: fullImageName,
                     gitHash: gitHash,
                 }
             })
-            .catch(function(error) {
+            .catch(function (error) {
                 logs.log(`Build has failed!`)
                 return Promise.reject(error)
             })
@@ -239,38 +232,40 @@ export default class ImageMaker {
         tarFilePath: string,
         baseImageNameWithoutVersionAndReg: string,
         appName: string,
-        appVersion: number
+        appVersion: number,
+        envVars: IAppEnvVar[]
     ) {
         const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return self
                     .convertCaptainDefinitionToDockerfile(
                         captainDefinition,
                         correctedDirProvided
                     )
-                    .then(function() {
+                    .then(function () {
                         return self.convertContentOfDirectoryIntoTar(
                             correctedDirProvided,
                             tarFilePath
                         )
                     })
-                    .then(function() {
+                    .then(function () {
                         return self.dockerApi
                             .buildImageFromDockerFile(
                                 baseImageNameWithoutVersionAndReg,
                                 appVersion,
                                 tarFilePath,
-                                self.buildLogsManager.getAppBuildLogs(appName)
+                                self.buildLogsManager.getAppBuildLogs(appName),
+                                envVars
                             )
-                            .catch(function(error: AnyError) {
+                            .catch(function (error: AnyError) {
                                 throw ApiStatusCodes.createError(
                                     ApiStatusCodes.BUILD_ERROR,
-                                    ('' + error).trim()
+                                    `${error}`.trim()
                                 )
                             })
                     })
-                    .then(function() {
+                    .then(function () {
                         return self.dockerRegistryHelper.retagAndPushIfDefaultPushExist(
                             baseImageNameWithoutVersionAndReg,
                             appVersion,
@@ -293,10 +288,10 @@ export default class ImageMaker {
         captainDefinitionRelativeFilePath: string
     ) {
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return fs.ensureDir(destDirectory)
             })
-            .then(function() {
+            .then(function () {
                 // If uploadedTarPath then extract into a directory
                 //
                 // If Repo then download.
@@ -313,7 +308,7 @@ export default class ImageMaker {
                             file: srcTar.uploadedTarPath,
                             cwd: destDirectory,
                         })
-                        .then(function() {
+                        .then(function () {
                             return srcTar.gitHash
                         })
                 }
@@ -328,7 +323,7 @@ export default class ImageMaker {
                         srcRepo.branch,
                         destDirectory
                     ) //
-                        .then(function() {
+                        .then(function () {
                             return GitHelper.getLastHash(destDirectory)
                         })
                 }
@@ -344,7 +339,7 @@ export default class ImageMaker {
                             ),
                             captainDefinitionContentSource.captainDefinitionContent
                         )
-                        .then(function() {
+                        .then(function () {
                             return captainDefinitionContentSource.gitHash
                         })
                 }
@@ -355,9 +350,9 @@ export default class ImageMaker {
 
     private getAllChildrenOfDirectory(directory: string) {
         return Promise.resolve() //
-            .then(function() {
-                return new Promise<string[]>(function(resolve, reject) {
-                    fs.readdir(directory, function(err, files) {
+            .then(function () {
+                return new Promise<string[]>(function (resolve, reject) {
+                    fs.readdir(directory, function (err, files) {
                         if (err) {
                             reject(err)
                             return
@@ -370,10 +365,10 @@ export default class ImageMaker {
 
     private getCaptainDefinition(captainDefinitionAbsolutePath: string) {
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return fs.readJson(captainDefinitionAbsolutePath)
             })
-            .then(function(data: ICaptainDefinition) {
+            .then(function (data: ICaptainDefinition) {
                 if (!data) {
                     throw ApiStatusCodes.createError(
                         ApiStatusCodes.STATUS_ERROR_GENERIC,
@@ -419,9 +414,8 @@ export default class ImageMaker {
         captainDefinition: ICaptainDefinition,
         directoryWithCaptainDefinition: string
     ) {
-        const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 let data = captainDefinition
                 if (data.templateId) {
                     return TemplateHelper.get().getDockerfileContentFromTemplateTag(
@@ -457,9 +451,9 @@ export default class ImageMaker {
                     )
                 }
             })
-            .then(function(dockerfileContent) {
+            .then(function (dockerfileContent) {
                 return fs.outputFile(
-                    directoryWithCaptainDefinition + '/' + DOCKER_FILE,
+                    `${directoryWithCaptainDefinition}/${DOCKER_FILE}`,
                     dockerfileContent
                 )
             })
@@ -477,16 +471,16 @@ export default class ImageMaker {
                 captainDefinitionRelativeFilePath
             )
             return Promise.resolve()
-                .then(function() {
+                .then(function () {
                     return fs.pathExists(captainDefinitionPossiblePath)
                 })
-                .then(function(exits) {
+                .then(function (exits) {
                     return (
                         !!exits &&
                         fs.statSync(captainDefinitionPossiblePath).isFile()
                     )
                 })
-                .then(function(captainDefinitionExists) {
+                .then(function (captainDefinitionExists) {
                     if (captainDefinitionExists) return true
 
                     // Falling back to plain Dockerfile, check if it exists!
@@ -494,18 +488,18 @@ export default class ImageMaker {
                     const dockerfilePossiblePath = path.join(dir, DOCKER_FILE)
                     return fs
                         .pathExists(dockerfilePossiblePath)
-                        .then(function(exits) {
+                        .then(function (exits) {
                             return (
                                 !!exits &&
                                 fs.statSync(dockerfilePossiblePath).isFile()
                             )
                         })
-                        .then(function(dockerfileExists) {
+                        .then(function (dockerfileExists) {
                             if (!dockerfileExists) return false
 
                             const captainDefinitionDefault: ICaptainDefinition = {
                                 schemaVersion: 2,
-                                dockerfilePath: './' + DOCKER_FILE,
+                                dockerfilePath: `./${DOCKER_FILE}`,
                             }
 
                             return fs
@@ -513,7 +507,7 @@ export default class ImageMaker {
                                     captainDefinitionPossiblePath,
                                     JSON.stringify(captainDefinitionDefault)
                                 )
-                                .then(function() {
+                                .then(function () {
                                     return true
                                 })
                         })
@@ -521,11 +515,11 @@ export default class ImageMaker {
         }
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 // make sure if you need to go to child directory
                 return isCaptainDefinitionOrDockerfileInDir(originalDirectory)
             })
-            .then(function(exists) {
+            .then(function (exists) {
                 if (exists) return originalDirectory
 
                 // check if there is only one child
@@ -534,13 +528,13 @@ export default class ImageMaker {
                 // if so, return the child directory
                 return self
                     .getAllChildrenOfDirectory(originalDirectory)
-                    .then(function(files) {
+                    .then(function (files) {
                         files = files || []
                         if (files.length === 1) {
                             return isCaptainDefinitionOrDockerfileInDir(
                                 path.join(originalDirectory, files[0])
                             ) //
-                                .then(function(existsInChild) {
+                                .then(function (existsInChild) {
                                     if (existsInChild)
                                         return path.join(
                                             originalDirectory,
@@ -560,7 +554,7 @@ export default class ImageMaker {
                         )
                     })
             })
-            .then(function(correctedRootDirectory) {
+            .then(function (correctedRootDirectory) {
                 return path.join(
                     correctedRootDirectory,
                     captainDefinitionRelativeFilePath
@@ -573,7 +567,7 @@ export default class ImageMaker {
         tarFilePath: string
     ) {
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return tar.c(
                     {
                         file: tarFilePath,

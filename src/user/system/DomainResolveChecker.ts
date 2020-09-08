@@ -1,12 +1,12 @@
-import LoadBalancerManager = require('./LoadBalancerManager')
-import CertbotManager = require('./CertbotManager')
-import CaptainConstants = require('../../utils/CaptainConstants')
-import Logger = require('../../utils/Logger')
-import request = require('request')
-import ApiStatusCodes = require('../../api/ApiStatusCodes')
-import uuid = require('uuid/v4')
-import fs = require('fs-extra')
+import { v4 as uuid } from 'uuid'
+import ApiStatusCodes from '../../api/ApiStatusCodes'
+import CaptainConstants from '../../utils/CaptainConstants'
+import Logger from '../../utils/Logger'
 import Utils from '../../utils/Utils'
+import CertbotManager from './CertbotManager'
+import LoadBalancerManager from './LoadBalancerManager'
+import request = require('request')
+import fs = require('fs-extra')
 
 export default class DomainResolveChecker {
     constructor(
@@ -41,46 +41,40 @@ export default class DomainResolveChecker {
             (identifierSuffix ? identifierSuffix : '')
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.certbotManager.domainValidOrThrow(domainName)
             })
-            .then(function() {
+            .then(function () {
                 return fs.outputFile(
-                    CaptainConstants.captainStaticFilesDir +
-                        CaptainConstants.nginxDomainSpecificHtmlDir +
-                        '/' +
-                        domainName +
-                        captainConfirmationPath,
+                    `${
+                        CaptainConstants.captainStaticFilesDir +
+                        CaptainConstants.nginxDomainSpecificHtmlDir
+                    }/${domainName}${captainConfirmationPath}`,
                     randomUuid
                 )
             })
-            .then(function() {
-                return new Promise<void>(function(resolve) {
-                    setTimeout(function() {
+            .then(function () {
+                return new Promise<void>(function (resolve) {
+                    setTimeout(function () {
                         resolve()
                     }, 1000)
                 })
             })
-            .then(function() {
-                return new Promise<void>(function(resolve, reject) {
-                    const url =
-                        'http://' +
-                        domainName +
-                        ':' +
-                        CaptainConstants.nginxPortNumber +
-                        captainConfirmationPath
+            .then(function () {
+                return new Promise<void>(function (resolve, reject) {
+                    const url = `http://${domainName}:${CaptainConstants.nginxPortNumber}${captainConfirmationPath}`
 
                     request(
                         url,
 
-                        function(error, response, body) {
+                        function (error, response, body) {
                             if (error || !body || body !== randomUuid) {
                                 Logger.e(
-                                    'Verification Failed for ' + domainName
+                                    `Verification Failed for ${domainName}`
                                 )
-                                Logger.e('Error        ' + error)
-                                Logger.e('body         ' + body)
-                                Logger.e('randomUuid   ' + randomUuid)
+                                Logger.e(`Error        ${error}`)
+                                Logger.e(`body         ${body}`)
+                                Logger.e(`randomUuid   ${randomUuid}`)
                                 reject(
                                     ApiStatusCodes.createError(
                                         ApiStatusCodes.VERIFICATION_FAILED,
@@ -104,15 +98,12 @@ export default class DomainResolveChecker {
 
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
-            const url =
-                'http://' +
-                domainName +
-                CaptainConstants.captainConfirmationPath
+        return new Promise<void>(function (resolve, reject) {
+            const url = `http://${domainName}${CaptainConstants.captainConfirmationPath}`
 
-            Logger.d('Sending request to ' + url)
+            Logger.d(`Sending request to ${url}`)
 
-            request(url, function(error, response, body) {
+            request(url, function (error, response, body) {
                 if (
                     error ||
                     !body ||

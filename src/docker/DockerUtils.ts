@@ -1,28 +1,30 @@
+import ApiStatusCodes from '../api/ApiStatusCodes'
+import CaptainConstants from '../utils/CaptainConstants'
+import Logger from '../utils/Logger'
 import DockerApi from './DockerApi'
 import SshClientImport = require('ssh2')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import CaptainConstants = require('../utils/CaptainConstants')
-import Logger = require('../utils/Logger')
 const SshClient = SshClientImport.Client
 
 export default class DockerUtils {
     static joinDockerNode(
         dockerApi: DockerApi,
+        sshUser: string,
+        sshPort: number,
         captainIpAddress: string,
         isManager: boolean,
         remoteNodeIpAddress: string,
         privateKey: string
     ) {
-        const remoteUserName = 'root' // Docker requires root access. It has to be root.
+        const remoteUserName = sshUser // Docker requires root access. It has to be root or any non root user that can run Docker without sudo
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return dockerApi.getJoinToken(isManager)
             })
-            .then(function(token) {
-                return new Promise<void>(function(resolve, reject) {
+            .then(function (token) {
+                return new Promise<void>(function (resolve, reject) {
                     const conn = new SshClient()
-                    conn.on('error', function(err) {
+                    conn.on('error', function (err) {
                         Logger.e(err)
                         reject(
                             ApiStatusCodes.createError(
@@ -31,16 +33,17 @@ export default class DockerUtils {
                             )
                         )
                     })
-                        .on('ready', function() {
+                        .on('ready', function () {
                             Logger.d('SSH Client :: ready')
                             conn.exec(
-                                CaptainConstants.disableFirewallCommand +
-                                    ' ' +
-                                    dockerApi.createJoinCommand(
-                                        captainIpAddress,
-                                        token
-                                    ),
-                                function(err, stream) {
+                                `${
+                                    CaptainConstants.disableFirewallCommand
+                                } ${dockerApi.createJoinCommand(
+                                    captainIpAddress,
+                                    token,
+                                    remoteNodeIpAddress
+                                )}`,
+                                function (err, stream) {
                                     if (err) {
                                         Logger.e(err)
                                         reject(
@@ -55,15 +58,12 @@ export default class DockerUtils {
                                     let hasExisted = false
 
                                     stream
-                                        .on('close', function(
+                                        .on('close', function (
                                             code: string,
                                             signal: string
                                         ) {
                                             Logger.d(
-                                                'Stream :: close :: code: ' +
-                                                    code +
-                                                    ', signal: ' +
-                                                    signal
+                                                `Stream :: close :: code: ${code}, signal: ${signal}`
                                             )
                                             conn.end()
                                             if (hasExisted) {
@@ -72,11 +72,11 @@ export default class DockerUtils {
                                             hasExisted = true
                                             resolve()
                                         })
-                                        .on('data', function(data: string) {
-                                            Logger.d('STDOUT: ' + data)
+                                        .on('data', function (data: string) {
+                                            Logger.d(`STDOUT: ${data}`)
                                         })
-                                        .stderr.on('data', function(data) {
-                                            Logger.e('STDERR: ' + data)
+                                        .stderr.on('data', function (data) {
+                                            Logger.e(`STDERR: ${data}`)
                                             if (hasExisted) {
                                                 return
                                             }
@@ -84,8 +84,7 @@ export default class DockerUtils {
                                             reject(
                                                 ApiStatusCodes.createError(
                                                     ApiStatusCodes.STATUS_ERROR_GENERIC,
-                                                    'Error during setup: ' +
-                                                        data
+                                                    `Error during setup: ${data}`
                                                 )
                                             )
                                         })
@@ -94,7 +93,7 @@ export default class DockerUtils {
                         })
                         .connect({
                             host: remoteNodeIpAddress,
-                            port: 22,
+                            port: sshPort,
                             username: remoteUserName,
                             privateKey: privateKey,
                         })

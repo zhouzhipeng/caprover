@@ -1,10 +1,7 @@
-import request = require('request')
 import fs = require('fs-extra')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import Logger = require('../utils/Logger')
-import CaptainConstants = require('../utils/CaptainConstants')
+import ApiStatusCodes from '../api/ApiStatusCodes'
 import { ITemplate } from '../models/OtherTypes'
-import TemplateHelperVersionPrinter = require('../utils/TemplateHelperVersionPrinter')
+import TemplateHelperVersionPrinter from '../utils/TemplateHelperVersionPrinter'
 
 class TemplateHelper {
     private templates: ITemplate[]
@@ -60,7 +57,7 @@ class TemplateHelper {
         }
         throw ApiStatusCodes.createError(
             ApiStatusCodes.STATUS_ERROR_GENERIC,
-            'TEMPLATE NAME NOT FOUND: ' + templateName
+            `TEMPLATE NAME NOT FOUND: ${templateName}`
         )
     }
 
@@ -77,20 +74,17 @@ class TemplateHelper {
 
         const templateObj = self.getTemplateFromTemplateName(templateName)
 
-        const fromLine =
-            templateObj.dockerHubImageName +
-            ':' +
-            templateVersion +
-            templateObj.tagSuffix
+        const fromLine = `${templateObj.dockerHubImageName}:${templateVersion}${templateObj.tagSuffix}`
 
-        return 'FROM ' + fromLine + '\n' + templateObj.postFromLines
+        return `FROM ${fromLine}
+${templateObj.postFromLines}`
     }
 }
 
 const templateHelperInstance = new TemplateHelper()
 
-export = {
-    get: function() {
+export default {
+    get: function () {
         return templateHelperInstance
     },
 }

@@ -1,11 +1,10 @@
 import express = require('express')
-import fs = require('fs')
-import BaseApi = require('../../../../api/BaseApi')
-import ApiStatusCodes = require('../../../../api/ApiStatusCodes')
-import Logger = require('../../../../utils/Logger')
-import CaptainConstants = require('../../../../utils/CaptainConstants')
+import ApiStatusCodes from '../../../../api/ApiStatusCodes'
+import BaseApi from '../../../../api/BaseApi'
+import InjectionExtractor from '../../../../injection/InjectionExtractor'
 import { CaptainError } from '../../../../models/OtherTypes'
-import InjectionExtractor = require('../../../../injection/InjectionExtractor')
+import CaptainConstants from '../../../../utils/CaptainConstants'
+import Logger from '../../../../utils/Logger'
 import Utils from '../../../../utils/Utils'
 
 const router = express.Router()
@@ -13,50 +12,21 @@ const router = express.Router()
 const DEFAULT_APP_CAPTAIN_DEFINITION = JSON.stringify({
     schemaVersion: 2,
     dockerfileLines: [
-        'FROM ' + CaptainConstants.configs.appPlaceholderImageName,
+        `FROM ${CaptainConstants.configs.appPlaceholderImageName}`,
     ],
 })
 
-// Get a list of oneclickspps
-router.get('/oneclickapps', function(req, res, next) {
-    fs.readdir(__dirname + '/../../dist/oneclick-apps', function(err, files) {
-        if (err) {
-            Logger.e(err)
-            res.sendStatus(500)
-            return
-        }
-
-        let ret = []
-
-        for (let i = 0; i < files.length; i++) {
-            if (files[i].endsWith('.js')) {
-                ret.push(files[i].substring(0, files[i].length - 3))
-            }
-        }
-
-        let baseApi = new BaseApi(
-            ApiStatusCodes.STATUS_OK,
-            'One click app list is fetched.'
-        )
-        baseApi.data = ret
-
-        res.send(baseApi)
-    })
-})
-
-// unused iamges
-router.get('/unusedImages', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+// unused images
+router.get('/unusedImages', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
     Promise.resolve()
-        .then(function() {
+        .then(function () {
             let mostRecentLimit = Number(req.query.mostRecentLimit || '0')
             return serviceManager.getUnusedImages(mostRecentLimit)
         })
-        .then(function(unusedImages) {
+        .then(function (unusedImages) {
             let baseApi = new BaseApi(
                 ApiStatusCodes.STATUS_OK,
                 'Unused images retrieved.'
@@ -69,19 +39,17 @@ router.get('/unusedImages', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-// unused iamges
-router.post('/deleteImages', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+// delete images
+router.post('/deleteImages', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
     let imageIds = req.body.imageIds || []
 
     Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.deleteImages(imageIds)
         })
-        .then(function() {
+        .then(function () {
             let baseApi = new BaseApi(
                 ApiStatusCodes.STATUS_OK,
                 'Images Deleted.'
@@ -92,7 +60,7 @@ router.post('/deleteImages', function(req, res, next) {
 })
 
 // Get All App Definitions
-router.get('/', function(req, res, next) {
+router.get('/', function (req, res, next) {
     const dataStore = InjectionExtractor.extractUserFromInjected(res).user
         .dataStore
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
@@ -102,10 +70,10 @@ router.get('/', function(req, res, next) {
     dataStore
         .getAppsDataStore()
         .getAppDefinitions()
-        .then(function(apps) {
+        .then(function (apps) {
             let promises: Promise<void>[] = []
 
-            Object.keys(apps).forEach(function(key, index) {
+            Object.keys(apps).forEach(function (key, index) {
                 let app = apps[key]
                 app.appName = key
                 app.isAppBuilding = serviceManager.isAppBuilding(key)
@@ -115,10 +83,10 @@ router.get('/', function(req, res, next) {
 
             return Promise.all(promises)
         })
-        .then(function() {
+        .then(function () {
             return dataStore.getDefaultAppNginxConfig()
         })
-        .then(function(defaultNginxConfig) {
+        .then(function (defaultNginxConfig) {
             let baseApi = new BaseApi(
                 ApiStatusCodes.STATUS_OK,
                 'App definitions are retrieved.'
@@ -134,29 +102,25 @@ router.get('/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/enablebasedomainssl/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/enablebasedomainssl/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
     const appName = req.body.appName
 
     return Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.enableSslForApp(appName)
         })
-        .then(function() {
-            let msg = 'General SSL is enabled for: ' + appName
+        .then(function () {
+            let msg = `General SSL is enabled for: ${appName}`
             Logger.d(msg)
             res.send(new BaseApi(ApiStatusCodes.STATUS_OK, msg))
         })
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/customdomain/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/customdomain/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
@@ -167,24 +131,18 @@ router.post('/customdomain/', function(req, res, next) {
     // Add customdomain.com to app in Data Store
 
     return Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.addCustomDomain(appName, customDomain)
         })
-        .then(function() {
-            let msg =
-                'Custom domain is enabled for: ' +
-                appName +
-                ' at ' +
-                customDomain
+        .then(function () {
+            let msg = `Custom domain is enabled for: ${appName} at ${customDomain}`
             Logger.d(msg)
             res.send(new BaseApi(ApiStatusCodes.STATUS_OK, msg))
         })
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/removecustomdomain/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/removecustomdomain/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
@@ -192,24 +150,18 @@ router.post('/removecustomdomain/', function(req, res, next) {
     let customDomain = (req.body.customDomain || '').toLowerCase()
 
     return Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.removeCustomDomain(appName, customDomain)
         })
-        .then(function() {
-            let msg =
-                'Custom domain is removed for: ' +
-                appName +
-                ' at ' +
-                customDomain
+        .then(function () {
+            let msg = `Custom domain is removed for: ${appName} at ${customDomain}`
             Logger.d(msg)
             res.send(new BaseApi(ApiStatusCodes.STATUS_OK, msg))
         })
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/enablecustomdomainssl/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/enablecustomdomainssl/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
@@ -220,10 +172,10 @@ router.post('/enablecustomdomainssl/', function(req, res, next) {
     // Verify customdomain.com is served from /customdomain.com/
 
     return Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.enableCustomDomainSsl(appName, customDomain)
         })
-        .then(function() {
+        .then(function () {
             let msg = `Custom domain SSL is enabled for: ${appName} at ${customDomain} `
             Logger.d(msg)
             res.send(new BaseApi(ApiStatusCodes.STATUS_OK, msg))
@@ -231,7 +183,7 @@ router.post('/enablecustomdomainssl/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/register/', function(req, res, next) {
+router.post('/register/', function (req, res, next) {
     const dataStore = InjectionExtractor.extractUserFromInjected(res).user
         .dataStore
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
@@ -243,15 +195,15 @@ router.post('/register/', function(req, res, next) {
 
     let appCreated = false
 
-    Logger.d('Registering app started: ' + appName)
+    Logger.d(`Registering app started: ${appName}`)
 
     dataStore
         .getAppsDataStore()
         .registerAppDefinition(appName, hasPersistentData)
-        .then(function() {
+        .then(function () {
             appCreated = true
         })
-        .then(function() {
+        .then(function () {
             const promiseToIgnore = serviceManager.scheduleDeployNewVersion(
                 appName,
                 {
@@ -264,15 +216,15 @@ router.post('/register/', function(req, res, next) {
 
             if (!isDetachedBuild) return promiseToIgnore
         })
-        .then(function() {
-            Logger.d('AppName is saved: ' + appName)
+        .then(function () {
+            Logger.d(`AppName is saved: ${appName}`)
             res.send(
                 new BaseApi(ApiStatusCodes.STATUS_OK, 'App Definition Saved')
             )
         })
-        .catch(function(error: CaptainError) {
+        .catch(function (error: CaptainError) {
             function createRejectionPromise() {
-                return new Promise<void>(function(resolve, reject) {
+                return new Promise<void>(function (resolve, reject) {
                     reject(error)
                 })
             }
@@ -281,7 +233,7 @@ router.post('/register/', function(req, res, next) {
                 return dataStore
                     .getAppsDataStore()
                     .deleteAppDefinition(appName)
-                    .then(function() {
+                    .then(function () {
                         return createRejectionPromise()
                     })
             } else {
@@ -291,35 +243,34 @@ router.post('/register/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/delete/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/delete/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
     let appName = req.body.appName
     let volumes = req.body.volumes || []
 
-    Logger.d('Deleting app started: ' + appName)
+    Logger.d(`Deleting app started: ${appName}`)
 
     Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.removeApp(appName)
         })
-        .then(function() {
+        .then(function () {
             return Utils.getDelayedPromise(volumes.length ? 12000 : 0)
         })
-        .then(function() {
+        .then(function () {
             return serviceManager.removeVolsSafe(volumes)
         })
-        .then(function(failedVolsToRemoved) {
-            Logger.d('AppName is deleted: ' + appName)
+        .then(function (failedVolsToRemoved) {
+            Logger.d(`AppName is deleted: ${appName}`)
 
             if (failedVolsToRemoved.length) {
                 const returnVal = new BaseApi(
                     ApiStatusCodes.STATUS_OK_PARTIALLY,
-                    'App is deleted. Some volumes were not safe to delete. Delete skipped for: ' +
-                        failedVolsToRemoved.join(' , ')
+                    `App is deleted. Some volumes were not safe to delete. Delete skipped for: ${failedVolsToRemoved.join(
+                        ' , '
+                    )}`
                 )
                 returnVal.data = { volumesFailedToDelete: failedVolsToRemoved }
                 res.send(returnVal)
@@ -332,9 +283,7 @@ router.post('/delete/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/rename/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/rename/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
@@ -344,10 +293,10 @@ router.post('/rename/', function(req, res, next) {
     Logger.d(`Renaming app started: From ${oldAppName} To ${newAppName} `)
 
     Promise.resolve()
-        .then(function() {
+        .then(function () {
             return serviceManager.renameApp(oldAppName, newAppName)
         })
-        .then(function() {
+        .then(function () {
             Logger.d('AppName is renamed')
             res.send(
                 new BaseApi(ApiStatusCodes.STATUS_OK, 'AppName is renamed')
@@ -356,9 +305,7 @@ router.post('/rename/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-router.post('/update/', function(req, res, next) {
-    const dataStore = InjectionExtractor.extractUserFromInjected(res).user
-        .dataStore
+router.post('/update/', function (req, res, next) {
     const serviceManager = InjectionExtractor.extractUserFromInjected(res).user
         .serviceManager
 
@@ -378,6 +325,7 @@ router.post('/update/', function(req, res, next) {
     let ports = req.body.ports || []
     let instanceCount = req.body.instanceCount || '0'
     let preDeployFunction = req.body.preDeployFunction || ''
+    let serviceUpdateOverride = req.body.serviceUpdateOverride || ''
     let containerHttpPort = Number(req.body.containerHttpPort) || 80
     let httpAuth = req.body.httpAuth
     let description = req.body.description || ''
@@ -392,11 +340,18 @@ router.post('/update/', function(req, res, next) {
         repoInfo.branch = repoInfo.branch.trim()
     }
 
-    if ((repoInfo.branch || repoInfo.user || repoInfo.repo || repoInfo.password || repoInfo.sshKey) && (
-        (!repoInfo.branch || !repoInfo.repo) ||
-        (!repoInfo.sshKey && !repoInfo.user && !repoInfo.password) ||
-        (repoInfo.password && !repoInfo.user) ||
-        (repoInfo.user && !repoInfo.password))) {
+    if (
+        (repoInfo.branch ||
+            repoInfo.user ||
+            repoInfo.repo ||
+            repoInfo.password ||
+            repoInfo.sshKey) &&
+        (!repoInfo.branch ||
+            !repoInfo.repo ||
+            (!repoInfo.sshKey && !repoInfo.user && !repoInfo.password) ||
+            (repoInfo.password && !repoInfo.user) ||
+            (repoInfo.user && !repoInfo.password))
+    ) {
         res.send(
             new BaseApi(
                 ApiStatusCodes.STATUS_ERROR_GENERIC,
@@ -405,8 +360,8 @@ router.post('/update/', function(req, res, next) {
         )
         return
     }
-    
-    Logger.d('Updating app started: ' + appName)
+
+    Logger.d(`Updating app started: ${appName}`)
 
     serviceManager
         .updateAppDefinition(
@@ -425,10 +380,11 @@ router.post('/update/', function(req, res, next) {
             repoInfo,
             customNginxConfig,
             preDeployFunction,
+            serviceUpdateOverride,
             websocketSupport
         )
-        .then(function() {
-            Logger.d('AppName is updated: ' + appName)
+        .then(function () {
+            Logger.d(`AppName is updated: ${appName}`)
             res.send(
                 new BaseApi(
                     ApiStatusCodes.STATUS_OK,
@@ -439,4 +395,4 @@ router.post('/update/', function(req, res, next) {
         .catch(ApiStatusCodes.createCatcher(res))
 })
 
-export = router
+export default router

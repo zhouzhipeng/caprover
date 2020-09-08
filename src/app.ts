@@ -6,18 +6,18 @@ import cookieParser = require('cookie-parser')
 import bodyParser = require('body-parser')
 import httpProxyImport = require('http-proxy')
 
-import CaptainManager = require('./user/system/CaptainManager')
-import BaseApi = require('./api/BaseApi')
-import ApiStatusCodes = require('./api/ApiStatusCodes')
-import Injector = require('./injection/Injector')
-import Logger = require('./utils/Logger')
-import CaptainConstants = require('./utils/CaptainConstants')
-
-import LoginRouter = require('./routes/login/LoginRouter')
-import DownloadRouter = require('./routes/download/DownloadRouter')
-import UserRouter = require('./routes/user/UserRouter')
-import InjectionExtractor = require('./injection/InjectionExtractor')
+import ApiStatusCodes from './api/ApiStatusCodes'
+import BaseApi from './api/BaseApi'
+import InjectionExtractor from './injection/InjectionExtractor'
+import * as Injector from './injection/Injector'
+import DownloadRouter from './routes/download/DownloadRouter'
+import LoginRouter from './routes/login/LoginRouter'
+import UserRouter from './routes/user/UserRouter'
+import CaptainManager from './user/system/CaptainManager'
+import CaptainConstants from './utils/CaptainConstants'
+import Logger from './utils/Logger'
 import Utils from './utils/Utils'
+
 // import { NextFunction, Request, Response } from 'express'
 
 const httpProxy = httpProxyImport.createProxyServer({})
@@ -30,7 +30,7 @@ app.set('view engine', 'ejs')
 app.use(favicon(path.join(__dirname, '../public', 'favicon.ico')))
 app.use(
     loggerMorgan('dev', {
-        skip: function(req, res) {
+        skip: function (req, res) {
             return (
                 req.originalUrl === CaptainConstants.healthCheckEndPoint ||
                 req.originalUrl.startsWith(
@@ -49,15 +49,12 @@ app.use(
 app.use(cookieParser())
 
 if (CaptainConstants.isDebug) {
-    app.use('*', function(req, res, next) {
+    app.use('*', function (req, res, next) {
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Access-Control-Allow-Credentials', 'true')
         res.setHeader(
             'Access-Control-Allow-Headers',
-            CaptainConstants.headerNamespace +
-                ',' +
-                CaptainConstants.headerAuth +
-                ',Content-Type'
+            `${CaptainConstants.headerNamespace},${CaptainConstants.headerAuth},Content-Type`
         )
 
         if (req.method === 'OPTIONS') {
@@ -67,10 +64,10 @@ if (CaptainConstants.isDebug) {
         }
     })
 
-    app.use('/force-exit', function(req, res, next) {
+    app.use('/force-exit', function (req, res, next) {
         res.send('Okay... I will exit in a second...')
 
-        setTimeout(function() {
+        setTimeout(function () {
             process.exit(0)
         }, 500)
     })
@@ -78,13 +75,13 @@ if (CaptainConstants.isDebug) {
 
 app.use(Injector.injectGlobal())
 
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
     if (InjectionExtractor.extractGlobalsFromInjected(res).forceSsl) {
         let isRequestSsl =
             req.secure || req.get('X-Forwarded-Proto') === 'https'
 
         if (!isRequestSsl) {
-            let newUrl = 'https://' + req.get('host') + req.originalUrl
+            let newUrl = `https://${req.get('host')}${req.originalUrl}`
             res.redirect(302, newUrl)
             return
         }
@@ -97,19 +94,22 @@ app.use(express.static(path.join(__dirname, '../dist-frontend')))
 
 app.use(express.static(path.join(__dirname, 'public')))
 
-app.use(CaptainConstants.healthCheckEndPoint, function(req, res, next) {
+app.use(CaptainConstants.healthCheckEndPoint, function (req, res, next) {
     res.send(CaptainManager.get().getHealthCheckUuid())
 })
 
 //  ************  Beginning of reverse proxy 3rd party services  ****************************************
 
-app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
+app.use(CaptainConstants.netDataRelativePath, function (req, res, next) {
     if (
         req.originalUrl.indexOf(CaptainConstants.netDataRelativePath + '/') !==
         0
     ) {
+        let isRequestSsl =
+            req.secure || req.get('X-Forwarded-Proto') === 'https'
+
         let newUrl =
-            'https://' +
+            (isRequestSsl ? 'https://' : 'http://') +
             req.get('host') +
             CaptainConstants.netDataRelativePath +
             '/'
@@ -125,7 +125,7 @@ app.use(
     Injector.injectUserUsingCookieDataOnly()
 )
 
-app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
+app.use(CaptainConstants.netDataRelativePath, function (req, res, next) {
     if (!InjectionExtractor.extractUserFromInjected(res)) {
         Logger.e('User not logged in for NetData')
         res.sendStatus(500)
@@ -134,7 +134,7 @@ app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
     }
 })
 
-httpProxy.on('error', function(err, req, resOriginal) {
+httpProxy.on('error', function (err, req, resOriginal) {
     if (err) {
         Logger.e(err)
     }
@@ -148,17 +148,14 @@ httpProxy.on('error', function(err, req, resOriginal) {
         0
     ) {
         resOriginal.end(
-            'Something went wrong... err: \n ' +
-                'NetData is not running! Are you sure you have started it?'
+            `Something went wrong... err:  \n NetData is not running! Are you sure you have started it?`
         )
     } else {
-        resOriginal.end(
-            'Something went wrong... err: \n ' + (err ? err : 'NULL')
-        )
+        resOriginal.end(`Something went wrong... err: \n ${err ? err : 'NULL'}`)
     }
 })
 
-app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
+app.use(CaptainConstants.netDataRelativePath, function (req, res, next) {
     if (Utils.isNotGetRequest(req)) {
         res.writeHead(401, {
             'Content-Type': 'text/plain',
@@ -168,7 +165,7 @@ app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
     }
 
     httpProxy.web(req, res, {
-        target: 'http://' + CaptainConstants.netDataContainerName + ':19999',
+        target: `http://${CaptainConstants.netDataContainerName}:19999`,
     })
 })
 
@@ -178,13 +175,12 @@ app.use(CaptainConstants.netDataRelativePath, function(req, res, next) {
 
 let API_PREFIX = '/api/'
 
-app.use(API_PREFIX + ':apiVersionFromRequest/', function(req, res, next) {
+app.use(API_PREFIX + ':apiVersionFromRequest/', function (req, res, next) {
     if (req.params.apiVersionFromRequest !== CaptainConstants.apiVersion) {
         res.send(
             new BaseApi(
                 ApiStatusCodes.STATUS_ERROR_GENERIC,
-                'This captain instance only accepts API ' +
-                    CaptainConstants.apiVersion
+                `This captain instance only accepts API ${CaptainConstants.apiVersion}`
             )
         )
         return
@@ -204,7 +200,10 @@ app.use(API_PREFIX + ':apiVersionFromRequest/', function(req, res, next) {
 
 // unsecured end points:
 app.use(API_PREFIX + CaptainConstants.apiVersion + '/login/', LoginRouter)
-app.use(API_PREFIX + CaptainConstants.apiVersion + '/downloads/', DownloadRouter)
+app.use(
+    API_PREFIX + CaptainConstants.apiVersion + '/downloads/',
+    DownloadRouter
+)
 
 // secured end points
 app.use(API_PREFIX + CaptainConstants.apiVersion + '/user/', UserRouter)
@@ -212,21 +211,23 @@ app.use(API_PREFIX + CaptainConstants.apiVersion + '/user/', UserRouter)
 //  *********************  End of API End Points  *******************************************
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
     res.locals.err = new Error('Not Found')
     res.locals.err.errorStatus = 404
     next(res.locals.err)
 })
 
 // error handler
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
     Promise.reject(err).catch(ApiStatusCodes.createCatcher(res))
 } as express.ErrorRequestHandler)
 
-// Initializing with delay helps with debugging. Usually, docker didn't see the CAPTAIN service
-// if this was done without a delay
-setTimeout(function() {
-    CaptainManager.get().initialize()
-}, 1500)
+export default app
 
-export = app
+export function initializeCaptainWithDelay() {
+    // Initializing with delay helps with debugging. Usually, docker didn't see the CAPTAIN service
+    // if this was done without a delay
+    setTimeout(function () {
+        CaptainManager.get().initialize()
+    }, 1500)
+}

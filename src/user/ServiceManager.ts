@@ -1,23 +1,23 @@
-import Logger = require('../utils/Logger')
-import CaptainConstants = require('../utils/CaptainConstants')
-import LoadBalancerManager = require('./system/LoadBalancerManager')
-import DockerApi, { IDockerUpdateOrders } from '../docker/DockerApi'
-import DataStore = require('../datastore/DataStore')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import requireFromString = require('require-from-string')
-import BuildLog = require('./BuildLog')
 import { ImageInfo } from 'dockerode'
-import DockerRegistryHelper = require('./DockerRegistryHelper')
+import ApiStatusCodes from '../api/ApiStatusCodes'
+import DataStore from '../datastore/DataStore'
+import DockerApi, { IDockerUpdateOrders } from '../docker/DockerApi'
+import CaptainConstants from '../utils/CaptainConstants'
+import Logger from '../utils/Logger'
+import Utils from '../utils/Utils'
+import Authenticator from './Authenticator'
+import DockerRegistryHelper from './DockerRegistryHelper'
 import ImageMaker, { BuildLogsManager } from './ImageMaker'
 import DomainResolveChecker from './system/DomainResolveChecker'
-import Authenticator = require('./Authenticator')
+import LoadBalancerManager from './system/LoadBalancerManager'
+import requireFromString = require('require-from-string')
 
 const serviceMangerCache = {} as IHashMapGeneric<ServiceManager>
 
 interface QueuedPromise {
     resolve: undefined | ((reason?: unknown) => void)
     reject: undefined | ((reason?: any) => void)
-    promise: undefined | (Promise<unknown>)
+    promise: undefined | Promise<unknown>
 }
 
 interface QueuedBuild {
@@ -95,7 +95,7 @@ class ServiceManager {
 
         if (activeBuildAppName) {
             const existingBuildForTheSameApp = self.queuedBuilds.find(
-                v => v.appName === appName
+                (v) => v.appName === appName
             )
 
             if (existingBuildForTheSameApp) {
@@ -131,7 +131,7 @@ class ServiceManager {
                 promise: undefined,
             }
 
-            let promise = new Promise(function(resolve, reject) {
+            let promise = new Promise(function (resolve, reject) {
                 promiseToSave.resolve = resolve
                 promiseToSave.reject = reject
             })
@@ -154,24 +154,25 @@ class ServiceManager {
         let deployedVersion: number
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().createNewVersion(appName)
             })
-            .then(function(appVersion) {
+            .then(function (appVersion) {
                 deployedVersion = appVersion
                 return dataStore
                     .getAppsDataStore()
                     .getAppDefinition(appName)
-                    .then(function(app) {
+                    .then(function (app) {
                         return self.imageMaker.ensureImage(
                             source,
                             appName,
                             app.captainDefinitionRelativeFilePath,
-                            appVersion
+                            appVersion,
+                            app.envVars
                         )
                     })
             })
-            .then(function(builtImage) {
+            .then(function (builtImage) {
                 return dataStore
                     .getAppsDataStore()
                     .setDeployedVersionAndImage(
@@ -180,13 +181,13 @@ class ServiceManager {
                         builtImage
                     )
             })
-            .then(function() {
+            .then(function () {
                 self.onBuildFinished(appName)
                 return self.ensureServiceInitedAndUpdated(appName)
             })
-            .catch(function(error) {
+            .catch(function (error) {
                 self.onBuildFinished(appName)
-                return new Promise<void>(function(resolve, reject) {
+                return new Promise<void>(function (resolve, reject) {
                     self.logBuildFailed(appName, error)
                     reject(error)
                 })
@@ -197,7 +198,7 @@ class ServiceManager {
         const self = this
         self.activeOrScheduledBuilds[appName] = false
 
-        Promise.resolve().then(function() {
+        Promise.resolve().then(function () {
             let newBuild = self.queuedBuilds.shift()
             if (newBuild)
                 self.startDeployingNewVersion(newBuild.appName, newBuild.source)
@@ -208,32 +209,32 @@ class ServiceManager {
         const self = this
 
         return Promise.resolve()
-            .then(function() {
-                Logger.d('Verifying Captain owns domain: ' + customDomain)
+            .then(function () {
+                Logger.d(`Verifying Captain owns domain: ${customDomain}`)
 
                 return self.domainResolveChecker.verifyCaptainOwnsDomainOrThrow(
                     customDomain,
                     undefined
                 )
             })
-            .then(function() {
-                Logger.d('Enabling SSL for: ' + appName + ' on ' + customDomain)
+            .then(function () {
+                Logger.d(`Enabling SSL for: ${appName} on ${customDomain}`)
 
                 return self.dataStore
                     .getAppsDataStore()
                     .verifyCustomDomainBelongsToApp(appName, customDomain)
             })
-            .then(function() {
+            .then(function () {
                 return self.domainResolveChecker.requestCertificateForDomain(
                     customDomain
                 )
             })
-            .then(function() {
+            .then(function () {
                 return self.dataStore
                     .getAppsDataStore()
                     .enableCustomDomainSsl(appName, customDomain)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
@@ -242,9 +243,9 @@ class ServiceManager {
         const self = this
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 const rootDomain = self.dataStore.getRootDomain()
-                const dotRootDomain = '.' + rootDomain
+                const dotRootDomain = `.${rootDomain}`
 
                 if (!customDomain || !/^[a-z0-9\-\.]+$/.test(customDomain)) {
                     throw ApiStatusCodes.createError(
@@ -279,19 +280,19 @@ class ServiceManager {
                     )
                 }
             })
-            .then(function() {
+            .then(function () {
                 return self.domainResolveChecker.verifyDomainResolvesToDefaultServerOnHost(
                     customDomain
                 )
             })
-            .then(function() {
-                Logger.d('Enabling custom domain for: ' + appName)
+            .then(function () {
+                Logger.d(`Enabling custom domain for: ${appName}`)
 
                 return self.dataStore
                     .getAppsDataStore()
                     .addCustomDomainForApp(appName, customDomain)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
@@ -300,14 +301,14 @@ class ServiceManager {
         const self = this
 
         return Promise.resolve()
-            .then(function() {
-                Logger.d('Removing custom domain for: ' + appName)
+            .then(function () {
+                Logger.d(`Removing custom domain for: ${appName}`)
 
                 return self.dataStore
                     .getAppsDataStore()
                     .removeCustomDomainForApp(appName, customDomain)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
@@ -318,41 +319,41 @@ class ServiceManager {
         let rootDomain: string
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.verifyCaptainOwnsGenericSubDomain(appName)
             })
-            .then(function() {
-                Logger.d('Enabling SSL for: ' + appName)
+            .then(function () {
+                Logger.d(`Enabling SSL for: ${appName}`)
 
                 return self.dataStore.getRootDomain()
             })
-            .then(function(val) {
+            .then(function (val) {
                 rootDomain = val
 
                 if (!rootDomain) {
                     throw new Error('No rootDomain! Cannot verify domain')
                 }
             })
-            .then(function() {
+            .then(function () {
                 // it will ensure that the app exists, otherwise it throws an exception
                 return self.dataStore
                     .getAppsDataStore()
                     .getAppDefinition(appName)
             })
-            .then(function() {
-                return appName + '.' + rootDomain
+            .then(function () {
+                return `${appName}.${rootDomain}`
             })
-            .then(function(domainName) {
+            .then(function (domainName) {
                 return self.domainResolveChecker.requestCertificateForDomain(
                     domainName
                 )
             })
-            .then(function() {
+            .then(function () {
                 return self.dataStore
                     .getAppsDataStore()
                     .setSslForDefaultSubDomain(appName, true)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
@@ -363,23 +364,23 @@ class ServiceManager {
         let rootDomain: string
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.dataStore.getRootDomain()
             })
-            .then(function(val) {
+            .then(function (val) {
                 rootDomain = val
             })
-            .then(function() {
+            .then(function () {
                 // it will ensure that the app exists, otherwise it throws an exception
                 return self.dataStore
                     .getAppsDataStore()
                     .getAppDefinition(appName)
             })
-            .then(function() {
-                return appName + '.' + rootDomain
+            .then(function () {
+                return `${appName}.${rootDomain}`
             })
-            .then(function(domainName) {
-                Logger.d('Verifying Captain owns domain: ' + domainName)
+            .then(function (domainName) {
+                Logger.d(`Verifying Captain owns domain: ${domainName}`)
 
                 return self.domainResolveChecker.verifyCaptainOwnsDomainOrThrow(
                     domainName,
@@ -389,7 +390,7 @@ class ServiceManager {
     }
 
     renameApp(oldAppName: string, newAppName: string) {
-        Logger.d('Renaming app: ' + oldAppName)
+        Logger.d(`Renaming app: ${oldAppName}`)
         const self = this
 
         const oldServiceName = this.dataStore
@@ -401,21 +402,21 @@ class ServiceManager {
         let defaultSslOn = false
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().getAppDefinition(oldAppName)
             })
-            .then(function(appDef) {
+            .then(function (appDef) {
                 defaultSslOn = !!appDef.hasDefaultSubDomainSsl
 
                 dataStore.getAppsDataStore().nameAllowedOrThrow(newAppName)
 
                 return self.ensureNotBuilding(oldAppName)
             })
-            .then(function() {
-                Logger.d('Check if service is running: ' + oldServiceName)
+            .then(function () {
+                Logger.d(`Check if service is running: ${oldServiceName}`)
                 return dockerApi.isServiceRunningByName(oldServiceName)
             })
-            .then(function(isRunning) {
+            .then(function (isRunning) {
                 if (!isRunning) {
                     throw ApiStatusCodes.createError(
                         ApiStatusCodes.STATUS_ERROR_GENERIC,
@@ -424,21 +425,21 @@ class ServiceManager {
                 }
                 return dockerApi.removeServiceByName(oldServiceName)
             })
-            .then(function() {
+            .then(function () {
                 return dataStore
                     .getAppsDataStore()
                     .renameApp(self.authenticator, oldAppName, newAppName)
             })
-            .then(function() {
+            .then(function () {
                 return self.ensureServiceInitedAndUpdated(newAppName)
             })
-            .then(function() {
+            .then(function () {
                 if (defaultSslOn) return self.enableSslForApp(newAppName)
             })
     }
 
     removeApp(appName: string) {
-        Logger.d('Removing service for: ' + appName)
+        Logger.d(`Removing service for: ${appName}`)
         const self = this
 
         const serviceName = this.dataStore
@@ -448,51 +449,48 @@ class ServiceManager {
         const dataStore = this.dataStore
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.ensureNotBuilding(appName)
             })
-            .then(function() {
-                Logger.d('Check if service is running: ' + serviceName)
+            .then(function () {
+                Logger.d(`Check if service is running: ${serviceName}`)
                 return dockerApi.isServiceRunningByName(serviceName)
             })
-            .then(function(isRunning) {
+            .then(function (isRunning) {
                 if (isRunning) {
                     return dockerApi.removeServiceByName(serviceName)
                 } else {
                     Logger.w(
-                        'Cannot delete service... It is not running: ' +
-                            serviceName
+                        `Cannot delete service... It is not running: ${serviceName}`
                     )
                     return true
                 }
             })
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().deleteAppDefinition(appName)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
 
     removeVolsSafe(volumes: string[]) {
-        const self = this
-
         const dockerApi = this.dockerApi
         const dataStore = this.dataStore
 
         const volsFailedToDelete: IHashMapGeneric<boolean> = {}
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().getAppDefinitions()
             })
-            .then(function(apps) {
+            .then(function (apps) {
                 // Don't even try deleting volumes which are present in other app definitions
-                Object.keys(apps).forEach(appName => {
+                Object.keys(apps).forEach((appName) => {
                     const app = apps[appName]
                     const volsInApp = app.volumes || []
 
-                    volsInApp.forEach(v => {
+                    volsInApp.forEach((v) => {
                         const volName = v.volumeName
                         if (!volName) return
                         if (volumes.indexOf(volName) >= 0) {
@@ -503,7 +501,7 @@ class ServiceManager {
 
                 const volumesTryToDelete: string[] = []
 
-                volumes.forEach(v => {
+                volumes.forEach((v) => {
                     if (!volsFailedToDelete[v]) {
                         volumesTryToDelete.push(
                             dataStore.getAppsDataStore().getVolumeName(v)
@@ -513,8 +511,8 @@ class ServiceManager {
 
                 return dockerApi.deleteVols(volumesTryToDelete)
             })
-            .then(function(failedVols) {
-                failedVols.forEach(v => {
+            .then(function (failedVols) {
+                failedVols.forEach((v) => {
                     volsFailedToDelete[v] = true
                 })
 
@@ -524,25 +522,23 @@ class ServiceManager {
 
     getUnusedImages(mostRecentLimit: number) {
         Logger.d(
-            'Getting unused images, excluding most recent ones: ' +
-                mostRecentLimit
+            `Getting unused images, excluding most recent ones: ${mostRecentLimit}`
         )
-        const self = this
 
         const dockerApi = this.dockerApi
         const dataStore = this.dataStore
         let allImages: ImageInfo[]
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return dockerApi.getImages()
             })
-            .then(function(images) {
+            .then(function (images) {
                 allImages = images
 
                 return dataStore.getAppsDataStore().getAppDefinitions()
             })
-            .then(function(apps) {
+            .then(function (apps) {
                 const unusedImages = []
 
                 if (mostRecentLimit < 0) {
@@ -558,9 +554,8 @@ class ServiceManager {
 
                     const repoTags = currentImage.RepoTags || []
 
-                    Object.keys(apps).forEach(function(key, index) {
-                        const app = apps[key]
-                        const appName = key
+                    Object.keys(apps).forEach(function (appName) {
+                        const app = apps[appName]
                         for (let k = 0; k < mostRecentLimit + 1; k++) {
                             const versionToCheck =
                                 Number(app.deployedVersion) - k
@@ -568,7 +563,7 @@ class ServiceManager {
                             if (versionToCheck < 0) continue
 
                             let deployedImage = ''
-                            app.versions.forEach(v => {
+                            app.versions.forEach((v) => {
                                 if (v.version === versionToCheck) {
                                     deployedImage = v.deployedImageName || ''
                                 }
@@ -596,11 +591,10 @@ class ServiceManager {
 
     deleteImages(imageIds: string[]) {
         Logger.d('Deleting images...')
-        const self = this
 
         const dockerApi = this.dockerApi
 
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return dockerApi.deleteImages(imageIds)
         })
     }
@@ -615,8 +609,7 @@ class ServiceManager {
         /*
         ////////////////////////////////// Expected content of the file //////////////////////////
 
-            const uuid = require('uuid/v4');
-            console.log('-------------------------------'+uuid());
+            console.log('-------------------------------'+new Date());
 
             preDeployFunction = function (captainAppObj, dockerUpdateObject) {
                 return Promise.resolve()
@@ -657,6 +650,7 @@ class ServiceManager {
         repoInfo: RepoInfo,
         customNginxConfig: string,
         preDeployFunction: string,
+        serviceUpdateOverride: string,
         websocketSupport: boolean
     ) {
         const self = this
@@ -665,8 +659,8 @@ class ServiceManager {
 
         let serviceName: string
 
-        const checkIfNodeIdExists = function(nodeIdToCheck: string) {
-            return dockerApi.getNodesInfo().then(function(nodeInfo) {
+        const checkIfNodeIdExists = function (nodeIdToCheck: string) {
+            return dockerApi.getNodesInfo().then(function (nodeInfo) {
                 for (let i = 0; i < nodeInfo.length; i++) {
                     if (nodeIdToCheck === nodeInfo[i].nodeId) {
                         return
@@ -675,20 +669,19 @@ class ServiceManager {
 
                 throw ApiStatusCodes.createError(
                     ApiStatusCodes.STATUS_ERROR_GENERIC,
-                    'Node ID you requested in not part of the swarm ' +
-                        nodeIdToCheck
+                    `Node ID you requested is not part of the swarm cluster: ${nodeIdToCheck}`
                 )
             })
         }
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.ensureNotBuilding(appName)
             })
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().getAppDefinition(appName)
             })
-            .then(function(app) {
+            .then(function (app) {
                 serviceName = dataStore
                     .getAppsDataStore()
                     .getServiceName(appName)
@@ -703,7 +696,7 @@ class ServiceManager {
                         } else {
                             return dockerApi
                                 .isServiceRunningByName(serviceName)
-                                .then(function(isRunning: boolean) {
+                                .then(function (isRunning: boolean) {
                                     if (!isRunning) {
                                         throw ApiStatusCodes.createError(
                                             ApiStatusCodes.STATUS_ERROR_GENERIC,
@@ -715,7 +708,7 @@ class ServiceManager {
                                         0
                                     )
                                 })
-                                .then(function(nodeIdRunningService: string) {
+                                .then(function (nodeIdRunningService: string) {
                                     if (!nodeIdRunningService) {
                                         throw ApiStatusCodes.createError(
                                             ApiStatusCodes.STATUS_ERROR_GENERIC,
@@ -740,7 +733,23 @@ class ServiceManager {
                     }
                 }
             })
-            .then(function() {
+            .then(function () {
+                serviceUpdateOverride = !!serviceUpdateOverride
+                    ? `${serviceUpdateOverride}`.trim()
+                    : ''
+                if (!serviceUpdateOverride) {
+                    // no override!
+                    return
+                }
+
+                if (!Utils.convertYamlOrJsonToObject(serviceUpdateOverride)) {
+                    throw ApiStatusCodes.createError(
+                        ApiStatusCodes.ILLEGAL_PARAMETER,
+                        'serviceUpdateOverride must be either a valid JSON object starting with { or an equivalent yaml'
+                    )
+                }
+            })
+            .then(function () {
                 return dataStore
                     .getAppsDataStore()
                     .updateAppDefinitionInDb(
@@ -760,13 +769,14 @@ class ServiceManager {
                         self.authenticator,
                         customNginxConfig,
                         preDeployFunction,
+                        serviceUpdateOverride,
                         websocketSupport
                     )
             })
-            .then(function() {
+            .then(function () {
                 return self.ensureServiceInitedAndUpdated(appName)
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
@@ -808,8 +818,6 @@ class ServiceManager {
     }
 
     getAppLogs(appName: string, encoding: string) {
-        const self = this
-
         const serviceName = this.dataStore
             .getAppsDataStore()
             .getServiceName(appName)
@@ -817,7 +825,7 @@ class ServiceManager {
         const dockerApi = this.dockerApi
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return dockerApi.getLogForService(
                     serviceName,
                     CaptainConstants.configs.appLogSize,
@@ -827,7 +835,7 @@ class ServiceManager {
     }
 
     ensureServiceInitedAndUpdated(appName: string) {
-        Logger.d('Ensure service inited and Updated for: ' + appName)
+        Logger.d(`Ensure service inited and Updated for: ${appName}`)
         const self = this
 
         const serviceName = this.dataStore
@@ -841,16 +849,16 @@ class ServiceManager {
         let dockerAuthObject: DockerAuthObj | undefined
 
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 return dataStore.getAppsDataStore().getAppDefinition(appName)
             })
-            .then(function(appFound) {
+            .then(function (appFound) {
                 app = appFound
 
                 Logger.d(`Check if service is running: ${serviceName}`)
                 return dockerApi.isServiceRunningByName(serviceName)
             })
-            .then(function(isRunning) {
+            .then(function (isRunning) {
                 for (let i = 0; i < app.versions.length; i++) {
                     const element = app.versions[i]
                     if (element.version === app.deployedVersion) {
@@ -867,7 +875,7 @@ class ServiceManager {
                 }
 
                 if (isRunning) {
-                    Logger.d('Service is already running: ' + serviceName)
+                    Logger.d(`Service is already running: ${serviceName}`)
                     return true
                 } else {
                     Logger.d(
@@ -887,18 +895,18 @@ class ServiceManager {
                     )
                 }
             })
-            .then(function() {
+            .then(function () {
                 return self.dockerRegistryHelper.getDockerAuthObjectForImageName(
                     imageName!
                 )
             })
-            .then(function(data) {
+            .then(function (data) {
                 dockerAuthObject = data
             })
-            .then(function() {
+            .then(function () {
                 return self.createPreDeployFunctionIfExist(app)
             })
-            .then(function(preDeployFunction) {
+            .then(function (preDeployFunction) {
                 Logger.d(
                     `Updating service ${serviceName} with image ${imageName}`
                 )
@@ -917,30 +925,28 @@ class ServiceManager {
                     app.ports,
                     app,
                     IDockerUpdateOrders.AUTO,
+                    Utils.convertYamlOrJsonToObject(app.serviceUpdateOverride),
                     preDeployFunction
                 )
             })
-            .then(function() {
-                return new Promise<void>(function(resolve) {
+            .then(function () {
+                return new Promise<void>(function (resolve) {
                     // Waiting 2 extra seconds for docker DNS to pickup the service name
                     setTimeout(resolve, 2000)
                 })
             })
-            .then(function() {
+            .then(function () {
                 return self.reloadLoadBalancer()
             })
     }
 
     reloadLoadBalancer() {
-        Logger.d('Updating Load Balancer')
+        Logger.d('Updating Load Balancer - ServiceManager')
         const self = this
-        return self.loadBalancerManager
-            .rePopulateNginxConfigFile(self.dataStore)
-            .then(function() {
-                Logger.d('sendReloadSignal...')
-                return self.loadBalancerManager.sendReloadSignal()
-            })
+        return self.loadBalancerManager.rePopulateNginxConfigFile(
+            self.dataStore
+        )
     }
 }
 
-export = ServiceManager
+export default ServiceManager

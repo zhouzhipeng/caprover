@@ -1,17 +1,16 @@
-import DataStore = require('../datastore/DataStore')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import Logger = require('../utils/Logger')
-import CaptainConstants = require('../utils/CaptainConstants')
+import ApiStatusCodes from '../api/ApiStatusCodes'
+import DataStore from '../datastore/DataStore'
+import RegistriesDataStore from '../datastore/RegistriesDataStore'
 import DockerApi from '../docker/DockerApi'
-import BuildLog = require('./BuildLog')
-import { AnyError } from '../models/OtherTypes'
-import RegistriesDataStore = require('../datastore/RegistriesDataStore')
 import {
-    IRegistryTypes,
-    IRegistryType,
     IRegistryInfo,
+    IRegistryType,
+    IRegistryTypes,
 } from '../models/IRegistryInfo'
+import { AnyError } from '../models/OtherTypes'
+import Logger from '../utils/Logger'
 import Utils from '../utils/Utils'
+import BuildLog from './BuildLog'
 
 class DockerRegistryHelper {
     private registriesDataStore: RegistriesDataStore
@@ -26,9 +25,9 @@ class DockerRegistryHelper {
     ): Promise<string> {
         const self = this
         let allRegistries: IRegistryInfo[]
-        let fullImageName = imageName + ':' + version
+        let fullImageName = `${imageName}:${version}`
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 if (!imageName) throw new Error('no image name! cannot re-tag!')
 
                 if (imageName.indexOf('/') >= 0 || imageName.indexOf(':') >= 0)
@@ -38,11 +37,11 @@ class DockerRegistryHelper {
 
                 return self.getAllRegistries()
             })
-            .then(function(data) {
+            .then(function (data) {
                 allRegistries = data
                 return self.getDefaultPushRegistryId()
             })
-            .then(function(defaultRegId) {
+            .then(function (defaultRegId) {
                 let ret: IRegistryInfo | undefined = undefined
                 for (let idx = 0; idx < allRegistries.length; idx++) {
                     const element = allRegistries[idx]
@@ -52,21 +51,16 @@ class DockerRegistryHelper {
                 }
                 return ret
             })
-            .then(function(data) {
+            .then(function (data) {
                 if (!data) return fullImageName
 
                 const imageNameWithoutDockerAuth = fullImageName
 
-                fullImageName =
-                    data.registryDomain +
-                    '/' +
-                    data.registryImagePrefix +
-                    '/' +
-                    fullImageName
+                fullImageName = `${data.registryDomain}/${data.registryImagePrefix}/${fullImageName}`
 
                 return self
                     .getDockerAuthObjectForImageName(fullImageName)
-                    .then(function(authObj) {
+                    .then(function (authObj) {
                         if (!authObj) {
                             throw new Error(
                                 'Docker Auth Object is NULL just after re-tagging! Something is wrong!'
@@ -76,35 +70,35 @@ class DockerRegistryHelper {
                         Logger.d('Docker Auth is found. Pushing the image...')
 
                         return Promise.resolve()
-                            .then(function() {
+                            .then(function () {
                                 return self.dockerApi.retag(
                                     imageNameWithoutDockerAuth,
                                     fullImageName
                                 )
                             })
-                            .then(function() {
+                            .then(function () {
                                 return self.dockerApi.pushImage(
                                     fullImageName,
                                     authObj,
                                     buildLogs
                                 )
                             })
-                            .catch(function(error: AnyError) {
+                            .catch(function (error: AnyError) {
                                 return new Promise<
                                     void
-                                >(function(resolve, reject) {
+                                >(function (resolve, reject) {
                                     Logger.e('PUSH FAILED')
                                     Logger.e(error)
                                     reject(
                                         ApiStatusCodes.createError(
                                             ApiStatusCodes.STATUS_ERROR_GENERIC,
-                                            'Push failed: ' + error
+                                            `Push failed: ${error}`
                                         )
                                     )
                                 })
                             })
                     })
-                    .then(function() {
+                    .then(function () {
                         return fullImageName
                     })
             })
@@ -115,17 +109,17 @@ class DockerRegistryHelper {
     ): Promise<DockerAuthObj | undefined> {
         const self = this
         return Promise.resolve() //
-            .then(function() {
+            .then(function () {
                 //
                 return self.getAllRegistries()
             })
-            .then(function(regs) {
+            .then(function (regs) {
                 for (let index = 0; index < regs.length; index++) {
                     const element = regs[index]
                     const prefix = element.registryImagePrefix
                     const registryIdentifierPrefix =
                         element.registryDomain +
-                        (prefix ? '/' + prefix : '') +
+                        (prefix ? `/${prefix}` : '') +
                         '/'
 
                     if (imageName.startsWith(registryIdentifierPrefix)) {
@@ -143,14 +137,14 @@ class DockerRegistryHelper {
 
     setDefaultPushRegistry(registryId: string) {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.registriesDataStore.setDefaultPushRegistryId(registryId)
         })
     }
 
     getDefaultPushRegistryId() {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.registriesDataStore.getDefaultPushRegistryId()
         })
     }
@@ -158,10 +152,10 @@ class DockerRegistryHelper {
     deleteRegistry(registryId: string, allowLocalDelete: boolean) {
         const self = this
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 return self.getDefaultPushRegistryId()
             })
-            .then(function(registryIdDefaultPush) {
+            .then(function (registryIdDefaultPush) {
                 if (registryId === registryIdDefaultPush) {
                     throw ApiStatusCodes.createError(
                         ApiStatusCodes.ILLEGAL_PARAMETER,
@@ -171,7 +165,7 @@ class DockerRegistryHelper {
 
                 return self.registriesDataStore.getRegistryById(registryId)
             })
-            .then(function(registry) {
+            .then(function (registry) {
                 if (
                     registry.registryType === IRegistryTypes.LOCAL_REG &&
                     !allowLocalDelete
@@ -187,7 +181,7 @@ class DockerRegistryHelper {
 
     getAllRegistries() {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.registriesDataStore.getAllRegistries()
         })
     }
@@ -202,7 +196,7 @@ class DockerRegistryHelper {
         const self = this
 
         return Promise.resolve()
-            .then(function() {
+            .then(function () {
                 registryDomain = Utils.removeHttpHttps(registryDomain)
 
                 if (registryType === IRegistryTypes.LOCAL_REG) {
@@ -217,7 +211,7 @@ class DockerRegistryHelper {
                         serveraddress: registryDomain,
                         // email: CaptainConstants.defaultEmail, // email is optional
                     })
-                    .catch(function(err) {
+                    .catch(function (err) {
                         Logger.e(err)
                         throw ApiStatusCodes.createError(
                             ApiStatusCodes.AUTHENTICATION_FAILED,
@@ -225,10 +219,10 @@ class DockerRegistryHelper {
                         )
                     })
             })
-            .then(function() {
+            .then(function () {
                 return self.registriesDataStore.getAllRegistries()
             })
-            .then(function(allRegs) {
+            .then(function (allRegs) {
                 let promiseToAddRegistry = self.registriesDataStore.addRegistryToDb(
                     registryUser,
                     registryPassword,
@@ -241,10 +235,10 @@ class DockerRegistryHelper {
                 // this way, it's easier for new users to grasp the concept of default push registry.
                 if (allRegs.length === 0) {
                     promiseToAddRegistry = promiseToAddRegistry //
-                        .then(function(idOfNewReg) {
+                        .then(function (idOfNewReg) {
                             return self.registriesDataStore
                                 .setDefaultPushRegistryId(idOfNewReg)
-                                .then(function() {
+                                .then(function () {
                                     return idOfNewReg
                                 })
                         })
@@ -262,7 +256,7 @@ class DockerRegistryHelper {
         registryImagePrefix: string
     ) {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             registryDomain = Utils.removeHttpHttps(registryDomain)
 
             return self.registriesDataStore.updateRegistry(
@@ -276,4 +270,4 @@ class DockerRegistryHelper {
     }
 }
 
-export = DockerRegistryHelper
+export default DockerRegistryHelper

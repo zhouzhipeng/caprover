@@ -1,9 +1,7 @@
 import request = require('request')
-import fs = require('fs-extra')
-import ApiStatusCodes = require('../api/ApiStatusCodes')
-import Logger = require('./Logger')
-import CaptainConstants = require('./CaptainConstants')
+import ApiStatusCodes from '../api/ApiStatusCodes'
 import { ITemplate } from '../models/OtherTypes'
+import Logger from './Logger'
 
 function getTagsForImage(
     imageBaseName: string,
@@ -11,15 +9,14 @@ function getTagsForImage(
     allTags: string[] | undefined
 ): Promise<string[]> {
     if (!url) {
-        url =
-            'https://hub.docker.com/v2/repositories/' + imageBaseName + '/tags'
+        url = `https://hub.docker.com/v2/repositories/${imageBaseName}/tags`
     }
 
-    return new Promise<string[]>(function(resolve, reject) {
+    return new Promise<string[]>(function (resolve, reject) {
         request(
             url!,
 
-            function(error, response, body) {
+            function (error, response, body) {
                 if (error || !body) {
                     Logger.e(error)
                     reject(error)
@@ -66,7 +63,7 @@ function getTagsForImage(
 
 function firstEndsWithSecond(str1: string, str2: string) {
     if (!str1 || !str2) {
-        throw new Error('Str1 or Str2 are null ' + !str1 + ' ' + !str2)
+        throw new Error(`Str1 or Str2 are null ${!str1} ${!str2}`)
     }
     const idx = str1.indexOf(str2)
     return idx >= 0 && idx + str2.length === str1.length
@@ -124,7 +121,7 @@ class TemplateHelperVersionPrinter {
             const currentImageName = templates[i].dockerHubImageName
 
             getTagsForImage(currentImageName, undefined, undefined)
-                .then(function(tags) {
+                .then(function (tags) {
                     tempCache[currentImageName] = tags
 
                     let isAllDone = true
@@ -160,11 +157,11 @@ class TemplateHelperVersionPrinter {
                         }
                     }
                 })
-                .catch(function(error) {
+                .catch(function (error) {
                     Logger.e(error)
                 })
         }
     }
 }
 
-export = TemplateHelperVersionPrinter
+export default TemplateHelperVersionPrinter

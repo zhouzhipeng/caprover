@@ -1,6 +1,6 @@
 import fs = require('fs-extra')
 import path = require('path')
-import EnvVars = require('./EnvVars')
+import EnvVars from './EnvVars'
 
 const CAPTAIN_BASE_DIRECTORY = '/captain'
 const CAPTAIN_DATA_DIRECTORY = CAPTAIN_BASE_DIRECTORY + '/data' // data that sits here can be backed up
@@ -17,7 +17,7 @@ const CONSTANT_FILE_OVERRIDE_USER =
 const configs = {
     publishedNameOnDockerHub: 'caprover/caprover',
 
-    version: '1.5.2',
+    version: '1.8.0',
 
     defaultMaxLogSize: '512m',
 
@@ -29,9 +29,13 @@ const configs = {
 
     skipVerifyingDomains: false,
 
+    enableDockerLogsTimestamp: true,
+
     registrySubDomainPort: 996,
 
-    netDataImageName: 'titpetric/netdata:1.8',
+    dockerApiVersion: 'v1.40',
+
+    netDataImageName: 'caprover/netdata:v1.8.0',
 
     registryImageName: 'registry:2',
 
@@ -68,6 +72,8 @@ let data = {
     captainStaticFilesDir: CAPTAIN_ROOT_DIRECTORY_GENERATED + '/static',
 
     nginxSharedPathOnNginx: '/nginx-shared',
+
+    nginxDhParamFileName: 'dhparam.pem',
 
     nginxDefaultHtmlDir: '/default',
 
@@ -117,7 +123,7 @@ let data = {
 
     // ********************* Local Docker Constants  ************************
 
-    certbotImageName: 'caprover/certbot-sleeping:v0.29.1',
+    certbotImageName: 'caprover/certbot-sleeping:v1.6.0',
 
     captainSaltSecretKey: 'captain-salt',
 
@@ -170,7 +176,7 @@ function overrideFromFile(fileName: string) {
                 continue
             }
 
-            console.log('Overriding ' + prop + ' from ' + fileName)
+            console.log(`Overriding ${prop} from ${fileName}`)
             // @ts-ignore
             configs[prop] = overridingValuesConfigs[prop]
         }
@@ -198,4 +204,4 @@ if (data.isDebug) {
     data.nginxPortNumber = 80
 }
 
-export = data
+export default data

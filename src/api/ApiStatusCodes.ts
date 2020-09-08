@@ -1,7 +1,7 @@
-import { CaptainError } from './CaptainError'
 import { Response } from 'express'
-import BaseApi = require('./BaseApi')
-import Logger = require('../utils/Logger')
+import Logger from '../utils/Logger'
+import BaseApi from './BaseApi'
+import { CaptainError } from './CaptainError'
 
 class ApiStatusCodes {
     static createError(code: number, message: string) {
@@ -9,7 +9,7 @@ class ApiStatusCodes {
     }
 
     static createCatcher(res: Response) {
-        return function(error: CaptainError | any) {
+        return function (error: CaptainError | any) {
             if (!error || error.errorStatus !== 404) {
                 Logger.e(error)
             }
@@ -48,4 +48,4 @@ class ApiStatusCodes {
     static readonly STATUS_PASSWORD_BACK_OFF = 1113
 }
 
-export = ApiStatusCodes
+export default ApiStatusCodes

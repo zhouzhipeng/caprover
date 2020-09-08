@@ -1,6 +1,6 @@
-import WebhooksRouter = require('./webhooks/WebhooksRouter')
-import AppDefinitionRouter = require('./appdefinition/AppDefinitionRouter')
-import AppDataRouter = require('./appdata/AppDataRouter')
+import AppDataRouter from './appdata/AppDataRouter'
+import AppDefinitionRouter from './appdefinition/AppDefinitionRouter'
+import WebhooksRouter from './webhooks/WebhooksRouter'
 
 import express = require('express')
 
@@ -13,4 +13,4 @@ router.use('/appData/', AppDataRouter)
 // semi-secured end points:
 router.use('/webhooks/', WebhooksRouter)
 
-export = router
+export default router

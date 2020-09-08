@@ -3,10 +3,10 @@
  */
 import Configstore = require('configstore')
 import fs = require('fs-extra')
-import CaptainConstants = require('../utils/CaptainConstants')
-import Encryptor = require('../utils/Encryptor')
-import AppsDataStore = require('./AppsDataStore')
-import RegistriesDataStore = require('./RegistriesDataStore')
+import CaptainConstants from '../utils/CaptainConstants'
+import CaptainEncryptor from '../utils/Encryptor'
+import AppsDataStore from './AppsDataStore'
+import RegistriesDataStore from './RegistriesDataStore'
 
 // keys:
 const NAMESPACE = 'namespace'
@@ -19,6 +19,7 @@ const EMAIL_ADDRESS = 'emailAddress'
 const NET_DATA_INFO = 'netDataInfo'
 const NGINX_BASE_CONFIG = 'nginxBaseConfig'
 const NGINX_CAPTAIN_CONFIG = 'nginxCaptainConfig'
+const CUSTOM_ONE_CLICK_APP_URLS = 'oneClickAppUrls'
 
 const DEFAULT_CAPTAIN_ROOT_DOMAIN = 'captain.localhost'
 
@@ -33,7 +34,7 @@ const DEFAULT_NGINX_CONFIG_FOR_APP = fs
     .toString()
 
 class DataStore {
-    private encryptor: Encryptor.CaptainEncryptor
+    private encryptor: CaptainEncryptor
     private namespace: string
     private data: Configstore
     private appsDataStore: AppsDataStore
@@ -44,9 +45,7 @@ class DataStore {
             `captain-store-${namespace}`, // This value seems to be unused
             {},
             {
-                configPath: `${
-                    CaptainConstants.captainDataDirectory
-                }/config-${namespace}.json`,
+                configPath: `${CaptainConstants.captainDataDirectory}/config-${namespace}.json`,
             }
         )
 
@@ -58,7 +57,7 @@ class DataStore {
     }
 
     setEncryptionSalt(salt: string) {
-        this.encryptor = new Encryptor.CaptainEncryptor(this.namespace + salt)
+        this.encryptor = new CaptainEncryptor(this.namespace + salt)
         this.appsDataStore.setEncryptor(this.encryptor)
         this.registriesDataStore.setEncryptor(this.encryptor)
     }
@@ -69,14 +68,14 @@ class DataStore {
 
     setHashedPassword(newHashedPassword: string) {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.data.set(HASHED_PASSWORD, newHashedPassword)
         })
     }
 
     getHashedPassword() {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.data.get(HASHED_PASSWORD)
         })
     }
@@ -106,7 +105,7 @@ class DataStore {
      */
     getNetDataInfo() {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             const netDataInfo = self.data.get(NET_DATA_INFO) || {}
             netDataInfo.isEnabled = netDataInfo.isEnabled || false
             netDataInfo.data = netDataInfo.data || {}
@@ -123,7 +122,7 @@ class DataStore {
 
     setNetDataInfo(netDataInfo: NetDataInfo) {
         const self = this
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return self.data.set(NET_DATA_INFO, netDataInfo)
         })
     }
@@ -147,7 +146,7 @@ class DataStore {
     setUserEmailAddress(emailAddress: string) {
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
+        return new Promise<void>(function (resolve, reject) {
             self.data.set(EMAIL_ADDRESS, emailAddress)
             resolve()
         })
@@ -156,7 +155,7 @@ class DataStore {
     getUserEmailAddress() {
         const self = this
 
-        return new Promise<string | undefined>(function(resolve, reject) {
+        return new Promise<string | undefined>(function (resolve, reject) {
             resolve(self.data.get(EMAIL_ADDRESS))
         })
     }
@@ -164,7 +163,7 @@ class DataStore {
     setHasRootSsl(hasRootSsl: boolean) {
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
+        return new Promise<void>(function (resolve, reject) {
             self.data.set(HAS_ROOT_SSL, hasRootSsl)
             resolve()
         })
@@ -173,7 +172,7 @@ class DataStore {
     setForceSsl(forceSsl: boolean) {
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
+        return new Promise<void>(function (resolve, reject) {
             self.data.set(FORCE_ROOT_SSL, forceSsl)
             resolve()
         })
@@ -182,7 +181,7 @@ class DataStore {
     getForceSsl() {
         const self = this
 
-        return new Promise<boolean>(function(resolve, reject) {
+        return new Promise<boolean>(function (resolve, reject) {
             resolve(!!self.data.get(FORCE_ROOT_SSL))
         })
     }
@@ -190,16 +189,14 @@ class DataStore {
     setHasRegistrySsl(hasRegistrySsl: boolean) {
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
+        return new Promise<void>(function (resolve, reject) {
             self.data.set(HAS_REGISTRY_SSL, hasRegistrySsl)
             resolve()
         })
     }
 
     getDefaultAppNginxConfig() {
-        const self = this
-
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return DEFAULT_NGINX_CONFIG_FOR_APP
         })
     }
@@ -207,7 +204,7 @@ class DataStore {
     getNginxConfig() {
         const self = this
 
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             return {
                 baseConfig: {
                     byDefault: DEFAULT_NGINX_BASE_CONFIG,
@@ -224,7 +221,7 @@ class DataStore {
     setNginxConfig(baseConfig: string, captainConfig: string) {
         const self = this
 
-        return Promise.resolve().then(function() {
+        return Promise.resolve().then(function () {
             self.data.set(NGINX_BASE_CONFIG, baseConfig)
             self.data.set(NGINX_CAPTAIN_CONFIG, captainConfig)
         })
@@ -233,7 +230,7 @@ class DataStore {
     getHasRootSsl() {
         const self = this
 
-        return new Promise<boolean>(function(resolve, reject) {
+        return new Promise<boolean>(function (resolve, reject) {
             resolve(self.data.get(HAS_ROOT_SSL))
         })
     }
@@ -241,7 +238,7 @@ class DataStore {
     getHasRegistrySsl() {
         const self = this
 
-        return new Promise<boolean>(function(resolve, reject) {
+        return new Promise<boolean>(function (resolve, reject) {
             resolve(!!self.data.get(HAS_REGISTRY_SSL))
         })
     }
@@ -249,11 +246,56 @@ class DataStore {
     setCustomDomain(customDomain: string) {
         const self = this
 
-        return new Promise<void>(function(resolve, reject) {
+        return new Promise<void>(function (resolve, reject) {
             self.data.set(CUSTOM_DOMAIN, customDomain)
+            resolve()
+        })
+    }
+
+    getAllOneClickBaseUrls() {
+        const self = this
+
+        return new Promise<string>(function (resolve, reject) {
+            resolve(self.data.get(CUSTOM_ONE_CLICK_APP_URLS))
+        }).then(function (dataString) {
+            const parsedArray = JSON.parse(dataString || '[]') as string[]
+
+            return parsedArray
+        })
+    }
+
+    insertOneClickBaseUrl(url: string) {
+        const self = this
+
+        return new Promise<string>(function (resolve, reject) {
+            const parsedArray = JSON.parse(
+                self.data.get(CUSTOM_ONE_CLICK_APP_URLS) || '[]'
+            ) as string[]
+
+            parsedArray.push(url)
+            self.data.set(
+                CUSTOM_ONE_CLICK_APP_URLS,
+                JSON.stringify(parsedArray)
+            )
+            resolve()
+        })
+    }
+
+    deleteOneClickBaseUrl(url: string) {
+        const self = this
+
+        return new Promise<string>(function (resolve, reject) {
+            const parsedArray = JSON.parse(
+                self.data.get(CUSTOM_ONE_CLICK_APP_URLS) || '[]'
+            ) as string[]
+
+            self.data.set(
+                CUSTOM_ONE_CLICK_APP_URLS,
+                JSON.stringify(parsedArray.filter((it) => it !== url))
+            )
             resolve()
         })
     }
 }
 
-export = DataStore
+export default DataStore

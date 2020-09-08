@@ -109,10 +109,7 @@ export default class ApacheMd5 {
             }
         }
 
-        final = crypto
-            .createHash('md5')
-            .update(ctx, 'ascii')
-            .digest('binary')
+        final = crypto.createHash('md5').update(ctx, 'ascii').digest('binary')
 
         // 1000 loop.
         for (let i = 0; i < 1000; ++i) {
@@ -146,6 +143,6 @@ export default class ApacheMd5 {
                 .digest('binary')
         }
 
-        return magic + salt + '$' + ApacheMd5.getPassword(final)
+        return `${magic + salt}$${ApacheMd5.getPassword(final)}`
     }
 }
