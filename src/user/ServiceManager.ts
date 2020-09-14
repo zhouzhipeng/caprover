@@ -184,12 +184,12 @@ class ServiceManager {
                     )
             })
             .then(function () {
-                request("https://push.zhouzhipeng.com/uQNoctNcamuWivbLeWhkmT/发布通知/服务["+appName+"]发布成功✅")
+                request(encodeURI("https://push.zhouzhipeng.com/uQNoctNcamuWivbLeWhkmT/发布通知/服务["+appName+"]发布成功✅"))
                 self.onBuildFinished(appName)
                 return self.ensureServiceInitedAndUpdated(appName)
             })
             .catch(function (error) {
-                request("https://push.zhouzhipeng.com/uQNoctNcamuWivbLeWhkmT/发布通知/服务["+appName+"]发布失败❌")
+                request(encodeURI("https://push.zhouzhipeng.com/uQNoctNcamuWivbLeWhkmT/发布通知/服务["+appName+"]发布失败❌"))
                 self.onBuildFinished(appName)
                 return new Promise<void>(function (resolve, reject) {
                     self.logBuildFailed(appName, error)

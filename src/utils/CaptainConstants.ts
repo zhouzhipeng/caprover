@@ -149,7 +149,7 @@ let data = {
 
     healthCheckEndPoint: '/checkhealth',
 
-    captainSubDomain: 'cloud',
+    captainSubDomain: 'captain',
 
     registrySubDomain: 'registry',
 

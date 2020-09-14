@@ -20,7 +20,7 @@ function isNameAllowed(name: string) {
         /[a-z0-9]$/.test(name) &&
         /^[a-z0-9\-]+$/.test(name) &&
         name.indexOf('--') < 0
-    return isNameFormattingOk && ['cloud', 'registry'].indexOf(name) < 0
+    return isNameFormattingOk && ['captain', 'registry'].indexOf(name) < 0
 }
 
 function isPortValid(portNumber: number) {
