@@ -27,7 +27,7 @@ const configs = {
 
     maxVersionHistory: 50,
 
-    skipVerifyingDomains: false,
+    skipVerifyingDomains: true,
 
     enableDockerLogsTimestamp: true,
 
@@ -149,7 +149,7 @@ let data = {
 
     healthCheckEndPoint: '/checkhealth',
 
-    captainSubDomain: 'captain',
+    captainSubDomain: 'cloud',
 
     registrySubDomain: 'registry',
 
